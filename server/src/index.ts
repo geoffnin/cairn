@@ -1,4 +1,5 @@
 import { handleApi } from "./api";
+import { serveUiFile } from "./assets";
 import { AuthError, authenticate, handleLogout } from "./auth";
 import { clickEvent, logEvent } from "./events";
 import { lookupTarget, resolveTarget } from "./links";
@@ -20,6 +21,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
   if (path.startsWith("/_/api/")) return handleApi(req, env, user, path.slice("/_/api".length));
   if (path === "/" || path === "/_") return redirect("/_/");
   if (path === "/_/") return renderUi();
+  if (path.startsWith("/_/ui/")) return serveUiFile(req, path);
   if (path.startsWith("/_/")) return new Response("Not found", { status: 404 });
 
   // go/<slug>[/<rest>]

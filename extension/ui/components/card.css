@@ -1,0 +1,12 @@
+/* Cards are flat: a hairline and the barest shadow. */
+@layer components {
+  .cn-card {
+    padding: var(--pad);
+    background: var(--surface);
+    border: 1px solid var(--line); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+  }
+  .cn-card-title, .cn-card > h2 { font: var(--type-heading); margin-bottom: var(--space-3); }
+  .cn-title { font: var(--type-title); letter-spacing: var(--tracking-title); }
+  .cn-section-title { font: var(--type-heading); }
+}

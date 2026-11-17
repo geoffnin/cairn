@@ -1013,6 +1013,45 @@ with tracing on.
 
 ---
 
+## D29. One stylesheet from the design system, shared by both UIs
+
+**Date:** 2026-11-17 · **Status:** accepted · **Amends:** D11
+
+**Decision.** The extension pages and the server's web UI use one set of plain CSS files in
+`extension/ui/`, built from the Cairn design system: tokens, a base layer and one file per
+component, joined by `cairn.css` in cascade layers (`tokens`, `base`, `components`). The Worker
+imports the same files as text and binary modules and serves them under `/_/ui/`, with the
+stylesheet's `@import`s inlined into one response at a fingerprinted URL.
+
+**Why.**
+
+- *One source.* The two UIs show the same things (the New link form, the links table) and
+  should not drift. The extension can only load files inside its own folder, so that is where
+  they live; the Worker reaches across at bundle time.
+- *Tokens as data.* `design/tokens.json` is the design system's export. A script turns it into
+  `tokens.css`; colours become `light-dark()` pairs, so each is declared once for both themes and
+  follows `color-scheme` (the OS, or `data-theme` on `<html>`). A test keeps the file in step.
+- *Still no build step* (D11). The extension loads `cairn.css` and its `@import`s directly, which
+  costs nothing from local files; the server inlines them once when the Worker starts.
+- *Cascade layers* keep specificity flat: component rules never fight the base layer, and a
+  page's own unlayered rules always win without `!important`.
+- *Stricter CSP for the server UI.* Styles, fonts and images come from the Worker itself, so the
+  policy is `style-src 'self'` instead of `'unsafe-inline'`. Fonts are bundled, never fetched
+  from a font CDN, as the design system asks.
+- *The topographic footer is a mask*, not 35 KB of inline SVG on every page: `topo.svg` masks a
+  `--topo-line` fill, so it follows the theme.
+
+**Also.** Theme and density are now settings on the extension's options page, stored in the
+extension's `localStorage` and applied before first paint by `ui/display.js`. The server UI
+follows the OS theme at the default density. The minimum Chrome version is now 123, for
+`light-dark()`.
+
+**Not built.** The design system's keyboard row selection (`j`/`k`, `e`), Undo in place of the
+delete confirmation, editing in the New link card instead of a dialog, middle truncation of long
+URLs, and theme and density controls on the server UI.
+
+---
+
 ## Deferred
 
 Not built, on purpose, until someone needs them:

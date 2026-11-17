@@ -1,11 +1,9 @@
 import { api, backendId, getState, hasServerAccess, setMode } from "./config.js";
 import { createLink } from "./local.js";
+import { say as sayIn } from "./ui/status.js";
 
 const $ = (id) => document.getElementById(id);
-const say = (text, isErr = false) => {
-  $("msg").textContent = text;
-  $("msg").classList.toggle("err", isErr);
-};
+const say = (text, isErr = false) => sayIn($("msg"), text, isErr);
 const openTab = (url) => {
   chrome.tabs.create({ url });
   window.close();

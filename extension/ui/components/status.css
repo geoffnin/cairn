@@ -1,0 +1,23 @@
+/* One line of feedback, past tense, naming the link: "Created go/wiki."
+   Toggle is-error for problems. Toasts float for actions with no nearby place. */
+@layer components {
+  .cn-status { font: var(--type-body); color: var(--ink-muted); overflow-wrap: anywhere; }
+  .cn-status:empty { display: none; }
+  .cn-status .cn-go { color: var(--ink); }
+  .cn-status.is-error, .cn-status.is-error .cn-go { color: var(--clay); }
+  .cn-status a, .cn-status .cn-undo {
+    padding: 0; border: 0; background: none; font: inherit; font-weight: 500;
+    color: var(--moss); text-decoration: underline; cursor: pointer;
+  }
+
+  .cn-toast {
+    display: inline-flex; align-items: center; gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md);
+    box-shadow: var(--shadow-menu);
+    animation: cn-rise 180ms var(--ease-settle) both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .cn-toast { animation-name: cn-fade-in; }
+  }
+}

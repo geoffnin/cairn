@@ -1,0 +1,53 @@
+/* <label class="cn-field"><span class="cn-label">Name</span><input class="cn-input">
+   <span class="cn-hint">…</span></label>. Wrap a name input in .cn-gofield for the go/ prefix. */
+@layer components {
+  .cn-field { display: grid; gap: var(--space-1); min-width: 0; align-content: start; }
+  .cn-label { font: var(--type-label); color: var(--ink-muted); }
+  .cn-hint { font: var(--type-small); color: var(--ink-muted); }
+  .cn-hint code { color: var(--ink); }
+  .cn-hint .cn-go { font-size: 12px; line-height: inherit; }
+  .cn-hint.is-error { color: var(--clay); }
+
+  .cn-input {
+    width: 100%; height: var(--control); padding: 0 var(--space-3);
+    color: var(--ink); background: var(--surface);
+    border: 1px solid var(--line-control); border-radius: var(--radius-md);
+    transition: border-color 120ms var(--ease-quick);
+  }
+  .cn-input::placeholder { color: var(--ink-faint); }
+  .cn-input:hover:not(:disabled) { border-color: var(--ink-muted); }
+  .cn-input:disabled { opacity: .5; }
+  .cn-input.is-mono { font-family: var(--font-mono); font-size: 13px; }
+  .cn-input.is-invalid, .cn-input[aria-invalid="true"] { border-color: var(--clay); }
+  select.cn-input { padding-right: var(--space-2); }
+
+  /* The go/ prefix sits inside the field, so typing the name finishes the address. */
+  .cn-gofield { position: relative; display: block; }
+  .cn-gofield::before {
+    content: "go/"; position: absolute; left: var(--space-3); top: 50%; transform: translateY(-50%);
+    font-family: var(--font-mono); font-size: 13px; color: var(--ink-muted); pointer-events: none;
+  }
+  .cn-gofield .cn-input { font-family: var(--font-mono); font-size: 13px; padding-left: calc(var(--space-3) + 3ch); }
+
+  /* Search: sunken field with its shortcut as a kbd hint, hidden while focused. */
+  .cn-search { position: relative; }
+  .cn-cluster > .cn-search { flex: 1 1 240px; }
+  .cn-search .cn-input { background: var(--surface-sunken); padding-right: 40px; }
+  .cn-search .cn-kbd { position: absolute; right: var(--space-2); top: 50%; transform: translateY(-50%); pointer-events: none; }
+  .cn-search:focus-within .cn-kbd { display: none; }
+
+  .cn-kbd {
+    display: inline-block; min-width: 18px; padding: 1px 5px; text-align: center;
+    font: var(--type-kbd); color: var(--ink-muted);
+    background: var(--surface-sunken);
+    border: 1px solid var(--line); border-bottom-width: 2px; border-radius: var(--radius-sm);
+  }
+
+  /* Forms: Name and Destination side by side above 560px, stacked below. */
+  .cn-form { display: grid; gap: var(--space-3); }
+  .cn-form-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: var(--space-3); }
+  .cn-form-grid > .is-wide { grid-column: 1 / -1; }
+  @media (max-width: 560px) { .cn-form-grid { grid-template-columns: minmax(0, 1fr); } }
+  .cn-cluster { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) var(--space-3); }
+  .cn-form-foot { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; margin-top: var(--space-1); }
+}
