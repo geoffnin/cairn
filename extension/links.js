@@ -35,7 +35,8 @@ function row(l) {
   return el(
     "tr",
     null,
-    el("td", { className: "name" }, el("a", { href: `http://go/${encodeURIComponent(l.slug)}`, textContent: `go/${l.slug}` })),
+    // Straight to the local resolver: http://go/... would follow whichever mode is active.
+    el("td", { className: "name" }, el("a", { href: chrome.runtime.getURL(`go.html#${encodeURIComponent(l.slug)}`), textContent: `go/${l.slug}` })),
     dest,
     el("td", { className: "act" }, edit, " ", del),
   );

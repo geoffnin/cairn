@@ -2,13 +2,28 @@
 import { ValidationError, normalizeSlug, validateDescription, validateUrl } from "./golinks.js";
 
 const KEY = "localLinks";
+const LOCK = "cairn-local-links";
 const now = () => Math.floor(Date.now() / 1000);
 
+// A dictionary with no prototype, so a name like "constructor" is never mistaken for a saved link.
 async function readAll() {
-  return (await chrome.storage.local.get(KEY))[KEY] ?? {};
+  return Object.assign(Object.create(null), (await chrome.storage.local.get(KEY))[KEY]);
 }
-const writeAll = (links) => chrome.storage.local.set({ [KEY]: links });
 const present = (slug, l) => ({ slug, ...l });
+
+/**
+ * Runs one read-modify-write of the whole dictionary under a lock shared by every extension page
+ * (popup, settings, link manager), so two saves at once cannot erase each other. Nothing is
+ * written if `change` throws.
+ */
+function mutate(change) {
+  return navigator.locks.request(LOCK, async () => {
+    const all = await readAll();
+    const result = await change(all);
+    await chrome.storage.local.set({ [KEY]: { ...all } });
+    return result;
+  });
+}
 
 export async function getLink(slug) {
   const l = (await readAll())[slug];
@@ -31,29 +46,29 @@ export async function countLinks() {
 export async function createLink({ slug, url, description }) {
   const s = normalizeSlug(slug);
   const link = { url: validateUrl(url), description: validateDescription(description), created_at: now(), updated_at: now() };
-  const all = await readAll();
-  if (all[s]) throw new ValidationError(`go/${s} already exists.`);
-  all[s] = link;
-  await writeAll(all);
-  return present(s, link);
+  return mutate((all) => {
+    if (all[s]) throw new ValidationError(`go/${s} already exists.`);
+    all[s] = link;
+    return present(s, link);
+  });
 }
 
 export async function updateLink(slug, { url, description }) {
-  const all = await readAll();
-  const link = all[slug];
-  if (!link) throw new ValidationError(`go/${slug} does not exist.`);
-  all[slug] = {
-    ...link,
-    url: url === undefined ? link.url : validateUrl(url),
-    description: description === undefined ? link.description : validateDescription(description),
-    updated_at: now(),
-  };
-  await writeAll(all);
-  return present(slug, all[slug]);
+  return mutate((all) => {
+    const link = all[slug];
+    if (!link) throw new ValidationError(`go/${slug} does not exist.`);
+    all[slug] = {
+      ...link,
+      url: url === undefined ? link.url : validateUrl(url),
+      description: description === undefined ? link.description : validateDescription(description),
+      updated_at: now(),
+    };
+    return present(slug, all[slug]);
+  });
 }
 
 export async function deleteLink(slug) {
-  const all = await readAll();
-  delete all[slug];
-  await writeAll(all);
+  return mutate((all) => {
+    delete all[slug];
+  });
 }

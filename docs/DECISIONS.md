@@ -63,7 +63,7 @@ pays a round trip. D3 exists to take that off the redirect path.
 ## D3. Cache redirects in two layers in front of D1
 
 **Date:** 2026-11-17 · **Status:** accepted; memory TTL made configurable and misses shortened
-by D24
+by D24; KV is no longer filled by lookups and has no expiry (D25)
 
 **Decision.** `lookupTarget` reads through three levels:
 
@@ -812,10 +812,65 @@ repeated lookups of the same typo. Misses stay out of KV: KV entries cannot expi
 
 - *KV propagation.* After an edit, other Cloudflare locations can read the old value from KV for
   about a minute. That is KV's own edge caching; the setting cannot lower it.
-- *KV's 7-day expiry* is a backstop. Edits and deletes write through to KV, so it is not what
-  bounds staleness, with one exception: if a KV write fails during an edit (for example, the
-  free tier's 1,000 writes a day are used up), the old destination can be served for up to
-  7 days. The failure is logged but not shown to the editor. Revisit if that is ever seen.
+- *KV's 7-day expiry* (removed by D25) was a backstop. If a KV write failed during an edit, the
+  old destination could be served for up to 7 days. D25 closes that by refusing the edit.
+
+---
+
+## D25. Fixes from the first code review
+
+**Date:** 2026-11-17 · **Status:** accepted · **Amends:** D3, D22, D24
+
+An automated review of PR #1 found ten problems. Nine were fixed as described; for the tenth
+(Chrome policy format) the reviewer's suggested change was not made, for the reason given.
+
+**Server**
+
+- *Stale writes.* The API checked permission against a row it read before the request body
+  arrived, then updated or deleted by name only. A delayed request could undo an ownership
+  handover or delete a link someone had since recreated. Each link now has a `rev` that
+  changes on every write (migration `0005`), and `UPDATE` and `DELETE` only apply to the `rev`
+  that was checked. Clients may also send the `rev` they last saw (the web UI does) to get a
+  `409` instead of overwriting a change made after they loaded the page.
+- *Stale cache fills.* A lookup that missed KV read D1 and wrote the result to KV. If an edit
+  happened in between, that late write put the old destination back, for up to 7 days. Now
+  only changes write KV: they delete the entry first and refuse to go ahead (`503`) if they
+  cannot, then write the new value; if that last write fails, reads fall back to D1, which is
+  correct, just slower. Lookups never write KV, and entries no longer expire, since only
+  changes write them.
+  Cost: a link created before this change, or whose post-edit write failed, is read from D1
+  (with the memory cache) until it is next edited. One residual race remains: two edits to
+  the same link within the time it takes to write KV can leave the first edit's value in KV.
+  The `rev` check makes one of two overlapping edits fail, which narrows this to edits made
+  one after the other within milliseconds.
+- *Reserved names.* `robots.txt` and `favicon.ico` are answered by the router, so links with
+  those names could never be followed. They are now rejected.
+- *Destinations.* Redirects returned the stored text. `https:example.com` passes URL validation
+  but is a relative reference in a `Location` header, and non-ASCII paths cannot be sent in a
+  header at all. Destinations are now serialized through `URL` (in the extension too).
+- *List limit.* `?limit=-1` reached SQLite as a negative `LIMIT`, which means no limit. It is
+  clamped to a whole number from 1 to 500.
+
+**Extension**
+
+- *Lost local edits.* Each local change read the whole dictionary, changed it and wrote it
+  back, so two pages saving at once could erase each other's change. Changes now run under a
+  Web Lock shared by all extension pages. A browser test creating, editing and deleting from
+  two pages at once lost data without the lock and none with it.
+- *Inherited names.* The local dictionary was a plain object, so `go/constructor` matched a
+  built-in property. It is now read into an object with no prototype.
+- *Address-bar paths.* `go bug/ABC-12` was sent as one encoded name. Slashes, query strings
+  and existing `%` escapes are now kept; spaces still become slashes.
+- *Local list links* went through `http://go/`, which follows whichever mode is active. They
+  now open the local resolver directly.
+
+**Not changed: the Chrome policy example.** The review said the `3rdparty` JSON needs a
+`policy` object around the extension's settings. That level exists in the Windows registry
+layout (`...\extensions\<id>\policy`), but Chromium's administrator documentation maps the
+extension ID straight to its settings in the JSON layout. A local test was inconclusive: the
+headless Chromium here did not load extension policies in either shape. The README now shows
+the Admin console, Windows and Linux forms separately and asks admins to confirm with
+`chrome://policy`.
 
 ---
 

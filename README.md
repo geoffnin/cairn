@@ -177,17 +177,28 @@ toolbar popup; the other side's links are kept, just not used.
 
 **Roll it out:** zip the `extension/` folder and publish it (unlisted or private) on the Chrome
 Web Store, then force-install it by policy. Set the server URL for everyone with a managed
-storage policy; people then only need to sign in, and local mode is not offered:
+storage policy (the extension's `serverUrl` setting); people then only need to sign in, and
+local mode is not offered. Where that setting goes depends on how you manage Chrome:
 
-```json
-{
-  "3rdparty": {
-    "extensions": {
-      "<extension-id>": { "serverUrl": "https://go.example.com" }
+- **Google Admin console:** under the force-installed extension's settings, paste the policy
+  JSON: `{ "serverUrl": { "Value": "https://go.example.com" } }`
+- **Windows (registry):** a string value `serverUrl` under
+  `HKLM\Software\Policies\Google\Chrome\3rdparty\extensions\<extension-id>\policy`
+- **Linux (JSON policy file** in `/etc/opt/chrome/policies/managed/`):
+
+  ```json
+  {
+    "3rdparty": {
+      "extensions": {
+        "<extension-id>": { "serverUrl": "https://go.example.com" }
+      }
     }
   }
-}
-```
+  ```
+
+Check `chrome://policy` on a managed machine afterwards: `serverUrl` should be listed under the
+extension. These formats follow Chrome's administrator documentation but have not been tried on
+a managed fleet.
 
 ### Using it
 
@@ -225,9 +236,9 @@ All routes need a Cloudflare Access session. Writes need the header `X-Cairn-Req
 | `GET /_/api/me` | Current user |
 | `GET /_/api/links?q=&owner=me&limit=` | Search and list |
 | `POST /_/api/links` | Create: `{ slug, url, description? }` |
-| `GET /_/api/links/:slug` | Read |
-| `PUT /_/api/links/:slug` | Update any of `{ url, description, owner }` |
-| `DELETE /_/api/links/:slug` | Delete |
+| `GET /_/api/links/:slug` | Read. Includes `rev`, which changes on every edit |
+| `PUT /_/api/links/:slug` | Update any of `{ url, description, owner }`. Send the `rev` you last saw to get `409` instead of overwriting someone else's change |
+| `DELETE /_/api/links/:slug?rev=` | Delete; `rev` optional, as for `PUT` |
 
 ## Good to know
 
@@ -236,6 +247,9 @@ All routes need a Cloudflare Access session. Writes need the header `X-Cairn-Req
   to update in every Cloudflare location. A newly created link shows up within about 5 seconds
   for someone who tried the name just before. Lower the setting (or set `0`) if edits must land
   faster; the cost is more KV reads, which are cheap.
+- **If the redirect cache cannot be updated, edits are refused** with "try again later"
+  (for example once KV's 1,000 free writes a day are used up), rather than saved and served
+  stale. Each edit or delete uses up to two KV writes.
 - **Offboarding is done in Zero Trust.** Removing someone from your identity provider stops new
   sign-ins. To end sessions that are already open, revoke the person's sessions from their
   entry in the Zero Trust users list. Otherwise they last until the Access session duration runs out.

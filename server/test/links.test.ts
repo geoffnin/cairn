@@ -19,6 +19,8 @@ describe("resolveTarget", () => {
     ["https://a.test/browse/{*}", "ABC-12", "", "https://a.test/browse/ABC-12"],
     ["https://a.test/browse/{*}", "", "", "https://a.test/browse/"],
     ["https://a.test/s?q={*}", "a%20b&c=d/e", "", "https://a.test/s?q=a%20b%26c%3Dd%2Fe"],
+    ["https:a.test", "", "", "https://a.test/"],
+    ["https://a.test/文档", "", "", "https://a.test/%E6%96%87%E6%A1%A3"],
   ])("%s + %s %s", (target, rest, search, want) => {
     expect(resolveTarget(target, rest, search)).toBe(want);
   });
@@ -63,10 +65,17 @@ describe("redirects", () => {
     expect(await env.CACHE.get("l:c2")).toBeNull();
   });
 
-  it("fills KV from D1 on a cold read", async () => {
+  it("reads D1 on a KV miss without writing KV (only changes write it)", async () => {
     await env.DB.exec("INSERT INTO links (slug,url,owner,created_at,updated_at) VALUES ('cold','https://cold.test/','a@b.c',1,1)");
     expect((await call("/cold")).headers.get("location")).toBe("https://cold.test/");
-    expect(await env.CACHE.get("l:cold")).toBe("https://cold.test/");
+    expect(await env.CACHE.get("l:cold")).toBeNull();
+  });
+
+  it("normalizes destinations before redirecting", async () => {
+    await create("short", "https:example.com");
+    expect((await call("/short")).headers.get("location")).toBe("https://example.com/");
+    await create("docs-zh", "https://example.com/文档");
+    expect((await call("/docs-zh")).headers.get("location")).toBe("https://example.com/%E6%96%87%E6%A1%A3");
   });
 });
 
@@ -184,5 +193,89 @@ describe("redirect cache TTL", () => {
     expect(await where("soon")).toBe("/_/?new=soon");
     clock(T0 + 6_000);
     expect(await where("soon")).toBe("https://soon.test/");
+  });
+});
+
+describe("review fixes", () => {
+  const put = (slug: string, b: unknown, as?: string) => call(`/_/api/links/${slug}`, { method: "PUT", body: b, as });
+  const get = async (slug: string) => (await call(`/_/api/links/${slug}`)).json<{ rev: string; url: string; owner: string }>();
+
+  it("rejects names the router reserves", async () => {
+    for (const name of ["robots.txt", "favicon.ico", "ROBOTS.TXT"]) {
+      const res = await create(name, "https://a.test/");
+      expect(res.status, name).toBe(400);
+    }
+  });
+
+  it("clamps the list limit to a whole number between 1 and 500", async () => {
+    await create("a1", "https://a.test/");
+    await create("a2", "https://a.test/");
+    const count = async (limit: string) => (await (await call(`/_/api/links?limit=${limit}`)).json<{ links: unknown[] }>()).links.length;
+    expect(await count("-1")).toBe(1);
+    expect(await count("0")).toBe(1);
+    expect(await count("1.9")).toBe(1);
+    expect(await count("abc")).toBe(2);
+    expect(await count("999999")).toBe(2);
+  });
+
+  it("returns a revision and refuses updates and deletes made against an old one", async () => {
+    await create("rv", "https://one.test/");
+    const r1 = (await get("rv")).rev;
+    expect(r1).toMatch(/^[0-9a-f-]{36}$/);
+    expect((await put("rv", { url: "https://two.test/", rev: r1 })).status).toBe(200);
+    const r2 = (await get("rv")).rev;
+    expect(r2).not.toBe(r1);
+    // A client still holding r1 (an old form, a delayed request) must not win.
+    expect((await put("rv", { url: "https://stale.test/", rev: r1 })).status).toBe(409);
+    expect((await call(`/_/api/links/rv?rev=${r1}`, { method: "DELETE" })).status).toBe(409);
+    expect((await get("rv")).url).toBe("https://two.test/");
+    expect((await call(`/_/api/links/rv?rev=${r2}`, { method: "DELETE" })).status).toBe(200);
+  });
+
+  it("makes the write itself conditional, so a change in between cannot be undone", async () => {
+    // The API checks permission against the row it read; these call the store directly with
+    // that (now stale) revision, as a request delayed past another change would.
+    const { updateLink, deleteLink, getLink } = await import("../src/links");
+    await create("race", "https://one.test/");
+    const seen = (await getLink(env, "race"))!;
+    await put("race", { owner: "bob@example.com" }); // ownership handed over meanwhile
+    expect(await updateLink(env, "race", seen.rev, { url: seen.url, description: "", owner: "alice@example.com" })).toBeNull();
+    expect((await get("race")).owner).toBe("bob@example.com");
+
+    // Deleted and recreated by someone else meanwhile: the old delete must not remove it.
+    const old = (await getLink(env, "race"))!;
+    await call(`/_/api/links/race`, { method: "DELETE", as: "bob@example.com" });
+    await create("race", "https://recreated.test/", "carol@example.com");
+    expect(await deleteLink(env, "race", old.rev)).toBe(false);
+    expect((await get("race")).url).toBe("https://recreated.test/");
+  });
+
+  it("refuses to change a link when the cache cannot be cleared", async () => {
+    await create("kv", "https://one.test/");
+    const broken = {
+      get: (k: string) => env.CACHE.get(k),
+      put: () => Promise.reject(new Error("quota")),
+      delete: () => Promise.reject(new Error("quota")),
+      list: () => env.CACHE.list(),
+    } as unknown as KVNamespace;
+    const res = await call("/_/api/links/kv", { method: "PUT", body: { url: "https://two.test/" }, env: { CACHE: broken } });
+    expect(res.status).toBe(503);
+    expect((await get("kv")).url).toBe("https://one.test/");
+    expect((await call("/_/api/links/kv", { method: "DELETE", env: { CACHE: broken } })).status).toBe(503);
+    expect(await env.CACHE.get("l:kv")).toBe("https://one.test/");
+  });
+
+  it("serves the new destination after an edit, even if the cache write afterwards fails", async () => {
+    await create("fill", "https://one.test/");
+    const putFails = {
+      get: (k: string) => env.CACHE.get(k),
+      put: () => Promise.reject(new Error("quota")),
+      delete: (k: string) => env.CACHE.delete(k),
+      list: () => env.CACHE.list(),
+    } as unknown as KVNamespace;
+    expect((await call("/_/api/links/fill", { method: "PUT", body: { url: "https://two.test/" }, env: { CACHE: putFails } })).status).toBe(200);
+    expect(await env.CACHE.get("l:fill")).toBeNull();
+    _resetMemCache();
+    expect((await call("/fill")).headers.get("location")).toBe("https://two.test/");
   });
 });

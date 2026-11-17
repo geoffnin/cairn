@@ -55,11 +55,25 @@ export function resolveTarget(target, rest, search) {
     out = target.replaceAll(PLACEHOLDER, (_m, offset) => (q !== -1 && offset > q ? forQuery : rest));
     rest = "";
   }
-  if (!rest && search.length <= 1) return out;
+  // Always serialize through URL: it completes forms like "https:example.com" and percent-encodes
+  // non-ASCII characters.
   const url = new URL(out);
   if (rest) url.pathname = `${url.pathname.replace(/\/$/, "")}/${rest}`;
   for (const [k, v] of new URLSearchParams(search)) url.searchParams.append(k, v);
-  return url.toString();
+  return url.href;
+}
+
+/**
+ * Turns what was typed after the "go" address-bar keyword into a go/ path. Spaces become
+ * slashes ("jira ABC-1" -> "jira/ABC-1"), while typed slashes, query strings and existing
+ * %-escapes are kept ("bug/ABC-12?x=1" stays as is). Anything else unsafe in a URL is escaped.
+ */
+export function omniboxPath(text) {
+  return text
+    .trim()
+    .split(/\s+/)
+    .map((part) => part.replace(/%(?![0-9A-Fa-f]{2})|[^A-Za-z0-9\-._~!$&'()*+,;=:@/?%]/gu, (c) => encodeURIComponent(c)))
+    .join("/");
 }
 
 /** Splits what followed "go/" ("bug/ABC-12?x=1") into slug, rest and query string. */

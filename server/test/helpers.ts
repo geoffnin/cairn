@@ -1,4 +1,3 @@
-import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { env as baseEnv } from "cloudflare:workers";
 import worker from "../src/index";
 import { _seedJwks } from "../src/jwt";
@@ -59,8 +58,5 @@ export async function call(path: string, opts: CallOpts = {}): Promise<Response>
     body: opts.rawBody ?? (opts.body === undefined ? undefined : JSON.stringify(opts.body)),
     redirect: "manual",
   });
-  const ctx = createExecutionContext();
-  const res = await worker.fetch(req as never, { ...env, ...opts.env }, ctx);
-  await waitOnExecutionContext(ctx);
-  return res;
+  return worker.fetch(req as never, { ...env, ...opts.env });
 }

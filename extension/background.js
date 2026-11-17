@@ -1,4 +1,5 @@
 import { api, getState, hasServerAccess, migrateSettings } from "./config.js";
+import { omniboxPath } from "./golinks.js";
 import { listLinks } from "./local.js";
 
 const REDIRECT_RULE = 1;
@@ -60,7 +61,7 @@ chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
 
 chrome.omnibox.onInputEntered.addListener((text, disposition) => {
   // "go jira ABC-1" behaves like go/jira/ABC-1; the redirect rule takes it from there.
-  const url = `http://go/${text.trim().split(/\s+/).map(encodeURIComponent).join("/")}`;
+  const url = `http://go/${omniboxPath(text)}`;
   if (disposition === "currentTab") chrome.tabs.update({ url });
   else chrome.tabs.create({ url, active: disposition === "newForegroundTab" });
 });

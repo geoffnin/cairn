@@ -1,5 +1,6 @@
 // JSON API under /_/api. All routes require an authenticated user (enforced by the router).
 import {
+  CacheUnavailableError,
   ValidationError,
   createLink,
   deleteLink,
@@ -66,7 +67,7 @@ export async function handleApi(req: Request, env: Env, user: User, path: string
         const links = await listLinks(env, {
           q: p.get("q")?.trim() || undefined,
           owner: p.get("owner") === "me" ? user.email : undefined,
-          limit: Number(p.get("limit")) || undefined,
+          limit: p.get("limit") ? Number(p.get("limit")) : undefined,
         });
         return json({ links: links.map((l) => present(env, user, l)) });
       }
@@ -93,18 +94,27 @@ export async function handleApi(req: Request, env: Env, user: User, path: string
       if (!write) return json(present(env, user, link));
       if (!canEdit(user, link)) return json({ error: `Only ${link.owner} or an admin can change go/${slug}.` }, 403);
 
+      // Optional optimistic concurrency for clients: the rev they last saw (body for PUT,
+      // ?rev= for DELETE). Independently, the write itself is conditional on the rev that was
+      // checked above, so nothing that changed in between can be overwritten.
+      const stale = () => json({ error: `go/${slug} was changed by someone else. Reload and try again.` }, 409);
+
       if (req.method === "PUT") {
         const b = await body(req);
-        const updated = await updateLink(env, slug, {
+        if (b.rev !== undefined && b.rev !== link.rev) return stale();
+        const updated = await updateLink(env, slug, link.rev, {
           url: b.url === undefined ? link.url : validateUrl(b.url),
           description: b.description === undefined ? link.description : validateDescription(b.description),
           owner: b.owner === undefined ? link.owner : validateOwner(b.owner),
         });
-        logEvent(linkUpdated(req, user.email, slug, link, updated!));
-        return json(present(env, user, updated!));
+        if (!updated) return stale();
+        logEvent(linkUpdated(req, user.email, slug, link, updated));
+        return json(present(env, user, updated));
       }
       if (req.method === "DELETE") {
-        await deleteLink(env, slug);
+        const expected = new URL(req.url).searchParams.get("rev");
+        if (expected !== null && expected !== link.rev) return stale();
+        if (!(await deleteLink(env, slug, link.rev))) return stale();
         logEvent(linkDeleted(req, user.email, slug, link));
         return json({ ok: true });
       }
@@ -112,6 +122,7 @@ export async function handleApi(req: Request, env: Env, user: User, path: string
     return json({ error: "Not found." }, 404);
   } catch (e) {
     if (e instanceof ValidationError || e instanceof URIError) return json({ error: e.message }, 400);
+    if (e instanceof CacheUnavailableError) return json({ error: e.message }, 503);
     throw e;
   }
 }

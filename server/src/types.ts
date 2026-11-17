@@ -32,4 +32,6 @@ export interface Link {
   owner: string;
   created_at: number;
   updated_at: number;
+  /** Changes on every write; used to reject stale updates and deletes. */
+  rev: string;
 }

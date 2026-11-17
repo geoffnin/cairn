@@ -157,7 +157,7 @@ function say(id, text, isErr) {
   m.classList.toggle('err', !!isErr);
 }
 
-let editing = null;
+let editing = null, editingRev = null;
 
 function row(l) {
   const actions = el('td', { className: 'act' });
@@ -170,7 +170,7 @@ function row(l) {
     const del = el('button', { className: 'link danger', type: 'button', textContent: 'Delete' });
     del.onclick = async () => {
       if (!confirm('Delete ' + P + l.slug + '? Anyone using it will land on the "create link" page instead.')) return;
-      try { await api('DELETE', '/links/' + encodeURIComponent(l.slug)); say('l-msg', 'Deleted ' + P + l.slug + '.'); load(); }
+      try { await api('DELETE', '/links/' + encodeURIComponent(l.slug) + '?rev=' + encodeURIComponent(l.rev)); say('l-msg', 'Deleted ' + P + l.slug + '.'); load(); }
       catch (e) { say('l-msg', e.message, true); }
     };
     actions.append(edit, del);
@@ -199,7 +199,7 @@ async function load() {
 }
 
 function openEdit(l) {
-  editing = l.slug;
+  editing = l.slug; editingRev = l.rev;
   $('e-title').textContent = 'Edit ' + P + l.slug;
   $('e-url').value = l.url; $('e-desc').value = l.description; $('e-owner').value = l.owner;
   say('e-msg', '');
@@ -210,7 +210,7 @@ $('e-cancel').onclick = () => $('edit').close();
 $('e-form').onsubmit = async (ev) => {
   ev.preventDefault();
   try {
-    await api('PUT', '/links/' + encodeURIComponent(editing), { url: $('e-url').value, description: $('e-desc').value, owner: $('e-owner').value });
+    await api('PUT', '/links/' + encodeURIComponent(editing), { url: $('e-url').value, description: $('e-desc').value, owner: $('e-owner').value, rev: editingRev });
     $('edit').close(); say('l-msg', 'Saved ' + P + editing + '.'); load();
   } catch (e) { say('e-msg', e.message, true); }
 };

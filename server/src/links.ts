@@ -1,7 +1,12 @@
 // Link storage (D1) with a two-level read cache for the redirect hot path:
-//   L1  per-isolate memory            - free, absorbs bursts; REDIRECT_CACHE_SECONDS (default 30)
-//   L2  Workers KV, written through   - edge-local reads, no D1 round trip
-//   L3  D1                            - source of truth
+//   L1  per-isolate memory  - free, absorbs bursts; REDIRECT_CACHE_SECONDS (default 30)
+//   L2  Workers KV          - edge-local reads, no D1 round trip
+//   L3  D1                  - source of truth
+//
+// KV is written only by link changes, never by lookups. A lookup that wrote what it had just
+// read from D1 could land after a concurrent edit had updated KV and put the old destination
+// back. Changes clear the KV entry before touching D1 (and refuse to proceed if they cannot),
+// then write the new value; a missing entry just means reads go to D1.
 import type { Env, Link } from "./types";
 import { nowSeconds } from "./util";
 
@@ -12,15 +17,20 @@ const MAX_CACHE_SECONDS = 3600;
 /** Unknown names are remembered briefly, so a link someone just created shows up quickly. */
 const MISS_CACHE_SECONDS = 5;
 const MEM_MAX = 2000;
-const KV_TTL_S = 7 * 24 * 3600;
 
 export class ValidationError extends Error {}
+/** The redirect cache could not be cleared, so changing the link now could leave it stale. */
+export class CacheUnavailableError extends Error {}
+
+/** Paths the router answers itself, so links with these names could never be followed. */
+const RESERVED = new Set(["robots.txt", "favicon.ico"]);
 
 export function normalizeSlug(raw: unknown): string {
   const slug = String(raw ?? "").trim().toLowerCase();
   if (!SLUG_RE.test(slug)) {
     throw new ValidationError("Name must be 1-64 characters: letters, digits, '-', '_' or '.', starting with a letter or digit.");
   }
+  if (RESERVED.has(slug)) throw new ValidationError(`go/${slug} is reserved.`);
   return slug;
 }
 
@@ -65,11 +75,12 @@ export function resolveTarget(target: string, rest: string, search: string): str
     out = target.replaceAll(PLACEHOLDER, (_m, offset: number) => (q !== -1 && offset > q ? forQuery : rest));
     rest = "";
   }
-  if (!rest && search.length <= 1) return out;
+  // Always serialize through URL: it completes forms like "https:example.com" and percent-encodes
+  // non-ASCII characters, which a Location header cannot carry.
   const url = new URL(out);
   if (rest) url.pathname = `${url.pathname.replace(/\/$/, "")}/${rest}`;
   for (const [k, v] of new URLSearchParams(search)) url.searchParams.append(k, v);
-  return url.toString();
+  return url.href;
 }
 
 // ---- cache ----
@@ -93,18 +104,29 @@ function memSet(env: Env, slug: string, url: string | null): void {
   mem.set(slug, { url, exp: Date.now() + ttl * 1000 });
 }
 
-async function kvSet(env: Env, slug: string, url: string | null): Promise<void> {
+/** Before a change: remove the cached destination, or refuse the change. */
+async function kvClear(env: Env, slug: string): Promise<void> {
   try {
-    if (url === null) await env.CACHE.delete(`l:${slug}`);
-    else await env.CACHE.put(`l:${slug}`, url, { expirationTtl: KV_TTL_S });
+    await env.CACHE.delete(`l:${slug}`);
   } catch (e) {
-    // The cache is an optimisation; never fail a request because of it (e.g. KV daily write quota).
+    console.error("cache clear failed", slug, e);
+    throw new CacheUnavailableError("The redirect cache is unavailable, so the link was not changed. Try again later.");
+  }
+}
+
+/** After a change: cache the new destination. If this fails, reads simply go to D1. */
+async function kvFill(env: Env, slug: string, url: string): Promise<void> {
+  try {
+    await env.CACHE.put(`l:${slug}`, url);
+  } catch (e) {
     console.warn("cache write failed", slug, e);
   }
 }
 
+const newRev = () => crypto.randomUUID();
+
 /** Redirect hot path: slug -> target URL, or null if there is no such link. */
-export async function lookupTarget(env: Env, ctx: ExecutionContext, slug: string): Promise<string | null> {
+export async function lookupTarget(env: Env, slug: string): Promise<string | null> {
   const hit = mem.get(slug);
   if (hit && hit.exp > Date.now()) return hit.url;
 
@@ -115,10 +137,9 @@ export async function lookupTarget(env: Env, ctx: ExecutionContext, slug: string
     console.warn("cache read failed", slug, e);
   }
   if (url === null) {
+    // Not written back to KV: see the note at the top of this file.
     const row = await env.DB.prepare("SELECT url FROM links WHERE slug = ?").bind(slug).first<{ url: string }>();
     url = row?.url ?? null;
-    // Misses are cached in memory only: keeps KV writes (the scarce free-tier resource) for real links.
-    if (url !== null) ctx.waitUntil(kvSet(env, slug, url));
   }
   memSet(env, slug, url);
   return url;
@@ -142,9 +163,11 @@ export async function listLinks(env: Env, opts: { q?: string; owner?: string; li
     where.push("owner = ?");
     args.push(opts.owner);
   }
+  // SQLite treats a negative LIMIT as "no limit", so clamp to a whole number in 1-500.
+  const limit = opts.limit !== undefined && Number.isFinite(opts.limit) ? Math.min(Math.max(Math.trunc(opts.limit), 1), 500) : 500;
   const sql = `SELECT * FROM links ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY slug LIMIT ?`;
   const { results } = await env.DB.prepare(sql)
-    .bind(...args, Math.min(opts.limit ?? 500, 500))
+    .bind(...args, limit)
     .all<Link>();
   return results;
 }
@@ -156,33 +179,44 @@ export async function createLink(
 ): Promise<Link | null> {
   const now = nowSeconds();
   const res = await env.DB.prepare(
-    "INSERT INTO links (slug, url, description, owner, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (slug) DO NOTHING",
+    "INSERT INTO links (slug, url, description, owner, created_at, updated_at, rev) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (slug) DO NOTHING",
   )
-    .bind(link.slug, link.url, link.description, link.owner, now, now)
+    .bind(link.slug, link.url, link.description, link.owner, now, now, newRev())
     .run();
   if (!res.meta.changes) return null;
   memSet(env, link.slug, link.url);
-  await kvSet(env, link.slug, link.url);
+  await kvFill(env, link.slug, link.url);
   return getLink(env, link.slug);
 }
 
+/** Applies the change only if the link is still at `rev`. Returns null if it has changed since. */
 export async function updateLink(
   env: Env,
   slug: string,
+  rev: string,
   patch: Pick<Link, "url" | "description" | "owner">,
 ): Promise<Link | null> {
-  await env.DB.prepare("UPDATE links SET url = ?, description = ?, owner = ?, updated_at = ? WHERE slug = ?")
-    .bind(patch.url, patch.description, patch.owner, nowSeconds(), slug)
+  await kvClear(env, slug);
+  const res = await env.DB.prepare(
+    "UPDATE links SET url = ?, description = ?, owner = ?, updated_at = ?, rev = ? WHERE slug = ? AND rev = ?",
+  )
+    .bind(patch.url, patch.description, patch.owner, nowSeconds(), newRev(), slug, rev)
     .run();
+  if (!res.meta.changes) {
+    mem.delete(slug);
+    return null;
+  }
   memSet(env, slug, patch.url);
-  await kvSet(env, slug, patch.url);
+  await kvFill(env, slug, patch.url);
   return getLink(env, slug);
 }
 
-export async function deleteLink(env: Env, slug: string): Promise<void> {
-  await env.DB.prepare("DELETE FROM links WHERE slug = ?").bind(slug).run();
-  memSet(env, slug, null);
-  await kvSet(env, slug, null);
+/** Deletes the link only if it is still at `rev`. Returns false if it has changed since. */
+export async function deleteLink(env: Env, slug: string, rev: string): Promise<boolean> {
+  await kvClear(env, slug);
+  const res = await env.DB.prepare("DELETE FROM links WHERE slug = ? AND rev = ?").bind(slug, rev).run();
+  mem.delete(slug);
+  return res.meta.changes > 0;
 }
 
 export function _resetMemCache(): void {

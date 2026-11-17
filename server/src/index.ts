@@ -7,7 +7,7 @@ import { renderUi } from "./ui";
 import { json, redirect } from "./util";
 
 // Everything that is not a go link lives under /_/ ("_" can never start a link name).
-async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+async function route(req: Request, env: Env): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname;
 
@@ -34,7 +34,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
     return new Response("Bad request", { status: 400 });
   }
 
-  const target = await lookupTarget(env, ctx, slug);
+  const target = await lookupTarget(env, slug);
   if (target === null) {
     logEvent(clickEvent(req, slug, false, null, rest !== ""));
     return redirect(`/_/?new=${encodeURIComponent(slug)}`);
@@ -46,9 +46,9 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
 }
 
 export default {
-  async fetch(req, env, ctx): Promise<Response> {
+  async fetch(req, env): Promise<Response> {
     try {
-      return await route(req, env, ctx);
+      return await route(req, env);
     } catch (e) {
       if (e instanceof AuthError) {
         if (new URL(req.url).pathname.startsWith("/_/api/")) return json({ error: e.message }, e.status);
