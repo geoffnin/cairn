@@ -1,0 +1,18 @@
+{
+  "name": "@cairn/web",
+  "private": true,
+  "type": "module",
+  "description": "The server's web UI. Builds to static files in server/public/_/, which the Worker serves.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@cairn/ui": "*"
+  },
+  "devDependencies": {
+    "svelte": "^5.57.3",
+    "vite": "^8.3.8",
+    "@sveltejs/vite-plugin-svelte": "^7.3.1"
+  }
+}

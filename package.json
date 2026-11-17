@@ -1,0 +1,27 @@
+{
+  "name": "cairn",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "ui",
+    "web",
+    "extension"
+  ],
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "build": "npm run build -w web -w extension",
+    "check": "node design/build-tokens.mjs --check && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
+    "test": "vitest run && npm test -w extension",
+    "tokens": "node design/build-tokens.mjs"
+  },
+  "devDependencies": {
+    "@testing-library/svelte": "^5.4.2",
+    "@types/chrome": "^0.3.7",
+    "jsdom": "^31.0.1",
+    "svelte-check": "^4.7.8",
+    "typescript": "^5.9.3",
+    "vitest": "^5.1.0"
+  }
+}

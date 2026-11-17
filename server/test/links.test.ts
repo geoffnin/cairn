@@ -133,13 +133,6 @@ describe("api", () => {
     expect((await post({ origin: "https://evil.test" })).status).toBe(403);
     expect((await post({ origin: "chrome-extension://abcdef" })).status).toBe(201);
   });
-
-  it("serves the UI with a strict CSP", async () => {
-    const res = await call("/_/");
-    expect(res.status).toBe(200);
-    const nonce = /script-src 'nonce-([^']+)'/.exec(res.headers.get("content-security-policy")!)![1];
-    expect(await res.text()).toContain(`<script nonce="${nonce}">`);
-  });
 });
 
 describe("redirect cache TTL", () => {

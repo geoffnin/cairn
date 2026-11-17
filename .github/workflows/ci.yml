@@ -3,29 +3,43 @@ on:
   push:
   pull_request:
 jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - run: npm run build
+      # The Deploy to Cloudflare button copies only server/, so it deploys the committed build.
+      - name: Committed server UI build is up to date
+        run: |
+          if [ -n "$(git status --porcelain -- server/public)" ]; then
+            git status --short -- server/public
+            echo "::error::server/public/_/ is out of date. Run 'npm run build' at the root and commit it."
+            exit 1
+          fi
   server:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: server
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .node-version
           cache: npm
-          cache-dependency-path: server/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+      # The server's tests run against the built web UI, which needs the root's tools.
       - run: npm ci
+      - run: npm ci
+        working-directory: server
       - run: npm run typecheck
+        working-directory: server
       - run: npm test
-  extension:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: extension
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: npm test
+        working-directory: server

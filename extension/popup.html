@@ -2,37 +2,11 @@
 <html lang="en" data-density="compact">
 <head>
 <meta charset="utf-8">
-<link rel="stylesheet" href="ui/cairn.css">
-<script src="ui/display.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>New go link</title>
+<!-- Theme and density before first paint; a plain script so it blocks. -->
+<script src="/display.js"></script>
+<script type="module" src="./src/popup.ts"></script>
 </head>
-<body class="cn-popup">
-  <div class="cn-popup-head">
-    <h1 class="cn-section-title">New go link</h1>
-    <span class="cn-hint" id="where"></span>
-  </div>
-  <form id="form" class="cn-form">
-    <label class="cn-field" id="backend-row" hidden>
-      <span class="cn-label">Use links from</span>
-      <select id="backend" class="cn-input"></select>
-    </label>
-    <label class="cn-field">
-      <span class="cn-label">Name</span>
-      <span class="cn-gofield"><input id="slug" class="cn-input" type="text" required maxlength="64" autocomplete="off" spellcheck="false" autofocus></span>
-    </label>
-    <label class="cn-field">
-      <span class="cn-label">Destination URL</span>
-      <input id="url" class="cn-input is-mono" type="text" required maxlength="2048" spellcheck="false">
-    </label>
-    <label class="cn-field">
-      <span class="cn-label">Description (optional)</span>
-      <input id="desc" class="cn-input" type="text" maxlength="500">
-    </label>
-    <p class="cn-status" id="msg" role="status"></p>
-    <div class="cn-popup-foot">
-      <button id="submit" class="cn-btn is-primary" type="submit">Create link</button>
-      <a id="browse" href="#">All links</a>
-    </div>
-  </form>
-  <script type="module" src="popup.js"></script>
-</body>
+<body></body>
 </html>

@@ -1,59 +1,53 @@
+// The web UI's static files (built from ../web by `npm test`) behind the Worker.
 import { describe, expect, it } from "vitest";
-import { bundleCss } from "../src/assets";
 import { call } from "./helpers";
 
-describe("web UI styles", () => {
-  it("links one fingerprinted stylesheet and allows only same-origin styles, fonts and images", async () => {
-    const res = await call("/_/");
-    const html = await res.text();
-    const href = /<link rel="stylesheet" href="([^"]+)">/.exec(html)![1]!;
-    expect(href).toMatch(/^\/_\/ui\/cairn\.css\?v=\w+$/);
-    expect(html).toContain('<svg class="cn-mark"');
-    const csp = res.headers.get("content-security-policy")!;
-    expect(csp).toContain("style-src 'self'");
-    expect(csp).toContain("font-src 'self'");
-    expect(csp).toContain("img-src 'self'");
-    expect(csp).not.toContain("unsafe-inline");
+async function page() {
+  const res = await call("/_/");
+  const html = await res.text();
+  const script = /<script type="module" crossorigin src="([^"]+)">/.exec(html)?.[1];
+  const style = /<link rel="stylesheet" crossorigin href="([^"]+)">/.exec(html)?.[1];
+  return { res, html, script: script!, style: style! };
+}
 
-    const css = await call(href);
-    expect(css.status).toBe(200);
-    expect(css.headers.get("content-type")).toBe("text/css; charset=utf-8");
-    expect(css.headers.get("cache-control")).toContain("immutable");
-    const text = await css.text();
-    expect(text).not.toMatch(/@import url/);
-    expect(text).toMatch(/^@layer tokens, base, components;/m);
-    for (const cls of [".cn-btn", ".cn-row", ".cn-gofield", ".cn-page::after"]) expect(text).toContain(cls);
+describe("web UI", () => {
+  it("serves the page with a strict CSP and no caching", async () => {
+    const { res, script, style } = await page();
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toMatch(/^text\/html/);
+    expect(res.headers.get("cache-control")).toBe("private, no-cache");
+    const csp = res.headers.get("content-security-policy")!;
+    for (const d of ["default-src 'none'", "script-src 'self'", "style-src 'self'", "font-src 'self'", "img-src 'self'", "frame-ancestors 'none'"]) {
+      expect(csp).toContain(d);
+    }
+    expect(csp).not.toMatch(/unsafe|nonce|data:/);
+    expect(script).toMatch(/^\/_\/assets\/.+\.js$/);
+    expect(style).toMatch(/^\/_\/assets\/.+\.css$/);
   });
 
-  it("serves every font and image the stylesheet refers to", async () => {
-    const html = await (await call("/_/")).text();
-    const href = /<link rel="stylesheet" href="([^"]+)">/.exec(html)![1]!;
-    const css = await (await call(href)).text();
-    const refs = [...css.matchAll(/url\("([^"]+)"\)/g)].map((m) => m[1]!);
-    expect(refs).toContain("topo.svg");
+  it("serves the hashed script, stylesheet and everything the stylesheet refers to, cached for good", async () => {
+    const { script, style } = await page();
+    const css = await (await call(style)).text();
+    const refs = [...css.matchAll(/url\(([^)]+)\)/g)].map((m) => m[1]!.replace(/^["']|["']$/g, "")).filter((r) => !r.startsWith("data:"));
     expect(refs.filter((r) => r.endsWith(".woff2"))).toHaveLength(6);
-    for (const ref of refs) {
-      const res = await call(`/_/ui/${ref}`);
-      expect(res.status, ref).toBe(200);
-      expect(res.headers.get("content-type"), ref).toBe(ref.endsWith(".woff2") ? "font/woff2" : "image/svg+xml");
-      expect((await res.arrayBuffer()).byteLength, ref).toBeGreaterThan(1000);
+    expect(refs.some((r) => /topo.*\.svg$/.test(r))).toBe(true);
+    for (const path of [script, style, ...refs]) {
+      const res = await call(path);
+      expect(res.status, path).toBe(200);
+      expect(res.headers.get("cache-control"), path).toBe("private, max-age=31536000, immutable");
+      await res.arrayBuffer();
     }
   });
 
   it("needs sign-in like everything else", async () => {
-    expect((await call("/_/ui/cairn.css", { as: null })).status).toBe(401);
+    const { script } = await page();
+    expect((await call("/_/", { as: null })).status).toBe(401);
+    expect((await call(script, { as: null })).status).toBe(401);
   });
 
-  it("404s unknown UI files", async () => {
-    expect((await call("/_/ui/nope.css")).status).toBe(404);
-  });
-
-  it("inlines imports in order and rewrites their relative URLs", () => {
-    const out = bundleCss('@layer a;\n@import url("x.css");\n@import url("c/y.css");', {
-      "x.css": 'a { b: url("f/z.woff2"); }',
-      "c/y.css": 'p { q: url("../t.svg"), url("data:image/svg+xml,x"), url("https://e.test/u"); }',
-    });
-    expect(out).toBe('@layer a;\na { b: url("f/z.woff2"); }\np { q: url("t.svg"), url("data:image/svg+xml,x"), url("https://e.test/u"); }');
-    expect(() => bundleCss('@import url("missing.css");', {})).toThrow(/missing\.css/);
+  it("refuses writes and 404s unknown files", async () => {
+    expect((await call("/_/", { method: "POST" })).status).toBe(405);
+    expect((await call("/_/nope.js")).status).toBe(404);
+    expect((await call("/_/assets/nope.js")).status).toBe(404);
   });
 });

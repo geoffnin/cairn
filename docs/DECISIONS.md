@@ -1052,6 +1052,81 @@ URLs, and theme and density controls on the server UI.
 
 ---
 
+## D30. Svelte and Vite for both UIs; the server's UI as static assets
+
+**Date:** 2026-11-17 · **Status:** accepted · **Supersedes:** D11 (no build step for the UI) ·
+**Amends:** D29
+
+**Decision.** The extension's pages and the server's web UI are Svelte 5 apps built by Vite into
+static files. Shared components live in an npm workspace package, `ui/`; the server's app is
+`web/`; the extension builds into `extension/dist/`. The Worker no longer contains UI code: Vite
+writes the server UI into `server/public/_/`, Workers Static Assets uploads it with the Worker,
+and the Worker serves it from the `ASSETS` binding after signing the request in.
+
+**Why.**
+
+- *One manage page, not two.* The New link card, search, links table and edit dialog existed
+  twice, in `extension/links.js` and in the script inside `server/src/ui.ts`, differing only in
+  where links come from. Now they are one component, `LinksPage.svelte`, which talks to a
+  `LinkSource`: local storage in the extension, the API on the server. Each new design-system
+  feature (keyboard selection, Undo, editing in the card) is now written once.
+- *Styles live with their components.* Each `.svelte` file carries its own scoped styles. Only
+  tokens, fonts, element defaults and a few primitives (labels, hints, the text-control box,
+  kbd) stay global. That replaces D29's hand-maintained list of component stylesheets, and the
+  Worker importing them across directories.
+- *The Worker shrinks to what must be code:* sign-in, the API and redirects. Its bundle went
+  from about 190 KiB to 27 KiB. The page's CSP is now a fixed `'self'` policy set in
+  `src/ui.ts`; Vite emits no inline scripts or styles, so the per-request nonce is gone.
+- *Svelte, not a larger framework.* It compiles to small plain JavaScript (about 24 KiB gzipped
+  for the server UI, fonts aside). It needs no `eval` and no runtime downloads, which suits the
+  extension's content-security rules. *Plain Vite, not SvelteKit*: Cairn has one server page
+  and three extension pages, so it needs no router. SvelteKit's Cloudflare adapter would also
+  put rendering back inside the Worker.
+
+**Signing in before every file.** `run_worker_first: true` sends every request to the Worker,
+which checks sign-in before handing a `/_/` path to `env.ASSETS`. Static Assets can serve files
+without running the Worker at all, but Cairn turns Access on for the Worker itself (D26). This
+session could not reach Cloudflare's documentation to confirm whether that Access setting also
+covers asset requests the Worker never sees. So the UI is not left to that: as before, nothing
+under `/_/` is served to someone Cairn has not signed in (D6), and tests check it. The cost is
+one Worker invocation per UI file, as before this change. Revisit once Access's coverage of
+static assets is confirmed, if those invocations matter.
+
+**Caching.** Vite puts a content hash in every file name under `/_/assets/`, so those are cached
+for a year (`private, immutable`). `index.html` is `private, no-cache`.
+
+**Costs, accepted.**
+
+- *A build step.* `npm run build` at the root (CI does it). For the server, the build is
+  Wrangler's own `build.command` (`scripts/build-ui.mjs`), so every `wrangler deploy` and
+  `wrangler dev` in a full checkout builds the UI first, however it is started. When a fresh
+  checkout has no tools, the script installs only the web build's (`npm ci --workspace web`:
+  Svelte and Vite, declared in `web/` and `extension/`), not the test tools declared at the root.
+  That is 74 MB instead of 136 MB. Node is pinned to 22 in `.node-version` (at the root and in
+  `server/`, where the button's build starts), because Vite needs 22.12 or later.
+- *The built server UI is committed* (`server/public/_/`, about 240 KB, most of it fonts). The
+  Deploy to Cloudflare button copies only `server/` into the installer's new repository (D26),
+  so `web/` and `ui/` are not there to build from; `build-ui.mjs` sees that and deploys the
+  committed build as it is. Rejected: pointing the button at the repository root, which needs a
+  second Wrangler configuration there; and fetching a prebuilt UI at deploy time, which ties an
+  installer's copy to this repository. To keep the commit honest, Svelte's scoped class names
+  are hashed from the CSS rather than the file path, so a build is byte-identical in any
+  checkout, and CI fails when the committed build differs from a fresh one. Both deploy paths
+  were checked with `wrangler deploy --dry-run`: a full copy of the repository with nothing
+  installed or built, and a copy of `server/` alone.
+- *The extension must be built before loading it unpacked:* load `extension/dist/`, not
+  `extension/`. Its non-UI modules (`background.js`, `config.js`, `local.js`, `golinks.js`)
+  are unchanged and still tested with `node --test`.
+- *Development dependencies:* Svelte, Vite, svelte-check, Vitest, jsdom and Testing Library.
+  None of them ship. What ships is the compiled output; the Worker still has no runtime
+  dependencies.
+
+**Not verified.** A real Deploy to Cloudflare install (that its copy of `server/` deploys the
+committed UI, and that the build image honours `.node-version`), and Static Assets on a live
+account. Both were run locally with `wrangler dev` and `wrangler deploy --dry-run`.
+
+---
+
 ## Deferred
 
 Not built, on purpose, until someone needs them:

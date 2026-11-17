@@ -7,6 +7,8 @@
 // Accepts one option, --dry-run (npm run deploy -- --dry-run): it builds and checks the Worker
 // with `wrangler deploy --dry-run` and touches nothing remote, migrations included. Any other
 // argument is refused before anything runs, rather than silently ignored.
+//
+// `wrangler deploy` builds the web UI first (build.command in wrangler.jsonc, scripts/build-ui.mjs).
 import { spawnSync } from "node:child_process";
 
 const args = process.argv.slice(2);
