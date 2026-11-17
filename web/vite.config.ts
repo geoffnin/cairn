@@ -5,7 +5,9 @@ import { defineConfig } from "vite";
 // Everything lives under /_/, where no link name can start.
 export default defineConfig({
   base: "/_/",
-  plugins: [svelte()],
+  // Scoped-style class names from the CSS itself, not the file's path, so the build is the same
+  // in every checkout (server/public/_/ is committed and checked in CI).
+  plugins: [svelte({ compilerOptions: { cssHash: ({ hash, css }) => `svelte-${hash(css)}` } })],
   build: {
     outDir: "../server/public/_",
     emptyOutDir: true,
@@ -16,7 +18,7 @@ export default defineConfig({
   server: {
     // `npm run dev` here, with `npm run dev` in server/ (port 8787) for the API.
     proxy: {
-      "/_/api": { target: "http://localhost:8787", headers: { origin: "http://localhost:8787" } },
+      "/_/api": { target: "http://localhost:8787", changeOrigin: true, headers: { origin: "http://localhost:8787" } },
       "/_/auth": "http://localhost:8787",
     },
   },

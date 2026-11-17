@@ -11,24 +11,36 @@
     create: (link: NewLink) => Promise<Link>;
     slug?: string;
     url?: string;
+    description?: string;
     message?: Message | null;
     urlInput?: HTMLInputElement;
     oncreated?: (link: Link) => void;
   };
-  let { create, slug = $bindable(""), url = $bindable(""), message = $bindable(null), urlInput = $bindable(), oncreated }: Props = $props();
-  let description = $state("");
+  let {
+    create, slug = $bindable(""), url = $bindable(""), description = $bindable(""),
+    message = $bindable(null), urlInput = $bindable(), oncreated,
+  }: Props = $props();
   let slugInput: HTMLInputElement | undefined = $state();
+  let busy = $state(false);
 
   async function submit(e: SubmitEvent) {
     e.preventDefault();
+    if (busy) return; // a second Enter while the first create is still on its way
+    busy = true;
+    const sent = { slug, url, description };
     try {
-      const link = await create({ slug, url, description });
+      const link = await create(sent);
       message = { text: `Created go/${link.slug}.` };
-      slug = url = description = "";
+      // Clear what was sent, but keep anything typed while it was being saved.
+      if (slug === sent.slug) slug = "";
+      if (url === sent.url) url = "";
+      if (description === sent.description) description = "";
       slugInput?.focus();
       oncreated?.(link);
     } catch (err) {
       message = { text: (err as Error).message, error: true };
+    } finally {
+      busy = false;
     }
   }
 </script>
@@ -45,7 +57,7 @@
       makes <code>go/bug/ABC-12</code> open that ticket.
     </p>
     <div class="foot">
-      <Button variant="primary" type="submit">Create link</Button>
+      <Button variant="primary" type="submit" disabled={busy}>Create link</Button>
       <Status {message} />
     </div>
   </form>

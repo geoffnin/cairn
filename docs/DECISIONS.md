@@ -1099,14 +1099,21 @@ for a year (`private, immutable`). `index.html` is `private, no-cache`.
 
 - *A build step.* `npm run build` at the root (CI does it). For the server, the build is
   Wrangler's own `build.command` (`scripts/build-ui.mjs`), so every `wrangler deploy` and
-  `wrangler dev` builds the UI first, however it is started. That includes the Deploy to
-  Cloudflare button and a deploy command changed to plain `npx wrangler deploy`. When a fresh
+  `wrangler dev` in a full checkout builds the UI first, however it is started. When a fresh
   checkout has no tools, the script installs only the web build's (`npm ci --workspace web`:
   Svelte and Vite, declared in `web/` and `extension/`), not the test tools declared at the root.
-  That is 74 MB instead of 136 MB. A copy of the repository with
-  nothing installed and nothing built was checked this way with `wrangler deploy --dry-run`
-  from `server/`. Node is pinned to 22 in `.node-version` (at the root and in `server/`, where
-  the button's build starts), because Vite needs 22.12 or later.
+  That is 74 MB instead of 136 MB. Node is pinned to 22 in `.node-version` (at the root and in
+  `server/`, where the button's build starts), because Vite needs 22.12 or later.
+- *The built server UI is committed* (`server/public/_/`, about 240 KB, most of it fonts). The
+  Deploy to Cloudflare button copies only `server/` into the installer's new repository (D26),
+  so `web/` and `ui/` are not there to build from; `build-ui.mjs` sees that and deploys the
+  committed build as it is. Rejected: pointing the button at the repository root, which needs a
+  second Wrangler configuration there; and fetching a prebuilt UI at deploy time, which ties an
+  installer's copy to this repository. To keep the commit honest, Svelte's scoped class names
+  are hashed from the CSS rather than the file path, so a build is byte-identical in any
+  checkout, and CI fails when the committed build differs from a fresh one. Both deploy paths
+  were checked with `wrangler deploy --dry-run`: a full copy of the repository with nothing
+  installed or built, and a copy of `server/` alone.
 - *The extension must be built before loading it unpacked:* load `extension/dist/`, not
   `extension/`. Its non-UI modules (`background.js`, `config.js`, `local.js`, `golinks.js`)
   are unchanged and still tested with `node --test`.
@@ -1114,9 +1121,9 @@ for a year (`private, immutable`). `index.html` is `private, no-cache`.
   None of them ship. What ships is the compiled output; the Worker still has no runtime
   dependencies.
 
-**Not verified.** A real Deploy to Cloudflare install with the extra build step (in particular,
-that the build image honours `.node-version` and allows the root `npm ci` the build script runs),
-and Static Assets on a live account. Both were run locally with `wrangler dev` and `wrangler deploy --dry-run`.
+**Not verified.** A real Deploy to Cloudflare install (that its copy of `server/` deploys the
+committed UI, and that the build image honours `.node-version`), and Static Assets on a live
+account. Both were run locally with `wrangler dev` and `wrangler deploy --dry-run`.
 
 ---
 

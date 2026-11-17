@@ -15,10 +15,12 @@
     fresh?: string | null;
     query?: string;
     filtered?: boolean;
+    /** True until the first load answers: show no rows rather than "No links yet". */
+    loading?: boolean;
     onedit: (link: Link) => void;
     ondelete: (link: Link) => void;
   };
-  let { links, href, shared = false, fresh = null, query = "", filtered = false, onedit, ondelete }: Props = $props();
+  let { links, href, shared = false, fresh = null, query = "", filtered = false, loading = false, onedit, ondelete }: Props = $props();
   const columns = $derived(shared ? 4 : 3);
 </script>
 
@@ -50,7 +52,7 @@
           </td>
         </tr>
       {:else}
-        <tr><td colspan={columns}><EmptyState {query} {filtered} /></td></tr>
+        {#if !loading}<tr><td colspan={columns}><EmptyState {query} {filtered} /></td></tr>{/if}
       {/each}
     </tbody>
   </table>

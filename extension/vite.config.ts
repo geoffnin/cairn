@@ -5,7 +5,9 @@ import { defineConfig } from "vite";
 // (manifest, icons, display.js) is copied as is. The pages and the service worker are entries;
 // the service worker keeps the fixed name the manifest gives it.
 export default defineConfig({
-  plugins: [svelte()],
+  // Scoped-style class names from the CSS itself, not the file's path, so the build is the same
+  // in every checkout (server/public/_/ is committed and checked in CI).
+  plugins: [svelte({ compilerOptions: { cssHash: ({ hash, css }) => `svelte-${hash(css)}` } })],
   build: {
     outDir: "dist",
     emptyOutDir: true,

@@ -40,7 +40,11 @@
   const allLinksUrl = (b: Backend) => (b.kind === "local" ? chrome.runtime.getURL("links.html") : `${b.url}/_/`);
   // The server's own form does the same job; used when the API cannot be called from here
   // (no host access granted, or the person needs to sign in to Cloudflare Access first).
-  const continueOnSite = (b: Server) => openTab(`${b.url}/_/?${new URLSearchParams({ new: slug.trim(), url: url.trim() })}`);
+  function continueOnSite(b: Server) {
+    const draft = new URLSearchParams({ new: slug.trim(), url: url.trim() });
+    if (description.trim()) draft.set("desc", description.trim());
+    openTab(`${b.url}/_/?${draft}`);
+  }
 
   async function submit(e: SubmitEvent) {
     e.preventDefault();
@@ -48,12 +52,15 @@
     if (active.kind === "server" && !(await hasServerAccess(active))) return continueOnSite(active);
     busy = true;
     message = null;
+    const sent = { slug, url, description };
     try {
-      const fields = { slug, url, description };
-      const link: Link = active.kind === "local" ? await createLink(fields) : await api(active, "POST", "/links", fields);
-      await navigator.clipboard.writeText(`go/${link.slug}`).catch(() => {});
-      message = { text: `Created go/${link.slug} and copied it to the clipboard.` };
-      slug = url = description = "";
+      const link: Link = active.kind === "local" ? await createLink(sent) : await api(active, "POST", "/links", sent);
+      const copied = await navigator.clipboard.writeText(`go/${link.slug}`).then(() => true, () => false);
+      message = { text: copied ? `Created go/${link.slug} and copied it to the clipboard.` : `Created go/${link.slug}.` };
+      // Clear what was sent, but keep anything typed while it was being saved.
+      if (slug === sent.slug) slug = "";
+      if (url === sent.url) url = "";
+      if (description === sent.description) description = "";
     } catch (err) {
       // Signed out of Access: the website can take over, and loading it signs the person in.
       if (active.kind === "server" && (err as { status?: number }).status === 401) return continueOnSite(active);
@@ -64,8 +71,8 @@
   }
 
   async function changeBackend() {
-    await setMode(backend);
-    loaded = getState();
+    // Submit waits on `loaded`, so it must include the switch, not only the reload after it.
+    loaded = setMode(backend).then(() => getState());
     show(await loaded);
   }
 

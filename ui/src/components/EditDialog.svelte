@@ -19,6 +19,7 @@
   let description = $state("");
   let owner = $state("");
   let error = $state<string | null>(null);
+  let saving = $state(false);
 
   $effect(() => {
     if (link && !dialog.open) {
@@ -34,14 +35,18 @@
 
   async function submit(e: SubmitEvent) {
     e.preventDefault();
-    if (!link) return;
+    // The link this save is for. The person may cancel, or open another link, before it ends.
+    const submitted = link;
+    if (!submitted || saving) return;
+    saving = true;
     try {
-      await save(link, shared ? { url, description, owner } : { url, description });
-      const saved = link;
-      link = null;
-      onsaved?.(saved);
+      await save(submitted, shared ? { url, description, owner } : { url, description });
+      if (link === submitted) link = null;
+      onsaved?.(submitted);
     } catch (err) {
-      error = (err as Error).message;
+      if (link === submitted) error = (err as Error).message;
+    } finally {
+      saving = false;
     }
   }
 </script>
@@ -55,7 +60,7 @@
     <Status message={error ? { text: error, error: true } : null} />
     <div class="foot">
       <Button variant="quiet" onclick={() => (link = null)}>Cancel</Button>
-      <Button variant="primary" type="submit">Save</Button>
+      <Button variant="primary" type="submit" disabled={saving}>Save</Button>
     </div>
   </form>
 </dialog>

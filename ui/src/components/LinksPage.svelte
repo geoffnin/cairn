@@ -18,6 +18,7 @@
   let { source, account }: { source: LinkSource; account?: Snippet } = $props();
 
   let links = $state<Link[]>([]);
+  let loaded = $state(false); // the first load has answered
   let q = $state("");
   let mine = $state(false);
   let listMessage = $state<Message | null>(null);
@@ -38,7 +39,11 @@
     const id = ++seq;
     try {
       const found = await source.list({ q: q.trim(), mine });
-      if (id === seq) links = found; // a newer load may have finished first
+      if (id !== seq) return; // a newer load finished first
+      links = found;
+      loaded = true;
+      if (listMessage?.error) listMessage = null; // the list is right again
+
     } catch (err) {
       if (id === seq) listMessage = { text: (err as Error).message, error: true };
     }
@@ -60,11 +65,13 @@
     }
   }
 
-  // An unknown name (go/x that does not exist yet) lands here as ?new=x, sometimes with ?url=.
+  // An unknown name (go/x that does not exist yet) lands here as ?new=x. The extension's popup
+  // hands over a link it could not save itself the same way, with ?url= and ?desc=.
   const params = new URLSearchParams(location.search);
   const unknownName = params.get("new") ?? "";
   let slug = $state(unknownName);
   let url = $state(params.get("url") ?? "");
+  let description = $state(params.get("desc") ?? "");
   let formMessage = $state<Message | null>(
     unknownName ? { text: `go/${unknownName} does not exist yet. Add a destination to create it.` } : null,
   );
@@ -84,7 +91,7 @@
 
   <LinkForm
     create={(l) => source.create(l)}
-    bind:slug bind:url bind:message={formMessage} bind:urlInput
+    bind:slug bind:url bind:description bind:message={formMessage} bind:urlInput
     oncreated={(link) => {
       history.replaceState(null, "", location.pathname);
       markFresh(link.slug);
@@ -98,7 +105,7 @@
       {#if source.shared}<Checkbox label="Only mine" bind:checked={mine} onchange={load} />{/if}
     </div>
     <LinkTable
-      {links} href={(l) => source.href(l)} shared={source.shared} {fresh}
+      {links} href={(l) => source.href(l)} shared={source.shared} {fresh} loading={!loaded}
       query={q.trim()} filtered={mine}
       onedit={(l) => (editing = l)} ondelete={remove}
     />

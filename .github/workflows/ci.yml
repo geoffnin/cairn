@@ -16,6 +16,14 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run build
+      # The Deploy to Cloudflare button copies only server/, so it deploys the committed build.
+      - name: Committed server UI build is up to date
+        run: |
+          if [ -n "$(git status --porcelain -- server/public)" ]; then
+            git status --short -- server/public
+            echo "::error::server/public/_/ is out of date. Run 'npm run build' at the root and commit it."
+            exit 1
+          fi
   server:
     runs-on: ubuntu-latest
     steps:

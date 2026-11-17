@@ -19,8 +19,11 @@ export async function api<T>(method: string, path: string, body?: unknown): Prom
     // fetch cannot follow across origins.
     throw new Error("Your sign-in has expired. Reload the page to sign in again.");
   }
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  const data: unknown = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const reason = typeof data === "object" && data !== null && "error" in data && typeof data.error === "string" ? data.error : "";
+    throw new Error(reason || `Request failed (${res.status})`);
+  }
   return data as T;
 }
 

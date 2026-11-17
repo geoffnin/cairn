@@ -54,13 +54,15 @@
     const seq = ++renderSeq;
     const state = await getState();
     const n = state.managed ? 0 : await countLinks();
-    const s = state.server ? await sharedStatus(state.server) : null;
     if (seq !== renderSeq) return; // a newer render finished first
+    // Show what is saved straight away; asking the server how it is can take a while.
+    if (current?.server?.url !== state.server?.url) status = null;
     current = state;
     mode = state.mode;
     count = n;
-    status = s;
     if (document.activeElement !== serverInput) serverUrl = state.server?.url ?? "";
+    const s = state.server ? await sharedStatus(state.server) : null;
+    if (seq === renderSeq) status = s;
   }
 
   function chooseShared() {

@@ -37,7 +37,8 @@ The reasoning behind each choice is in [docs/DECISIONS.md](docs/DECISIONS.md).
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/geoffnin/cairn/tree/main/server)
 
-The button copies the `server/` folder into a new GitHub repository on your account, creates
+The button copies the `server/` folder into a new GitHub repository on your account (with the
+web UI already built, in `server/public/_/`), creates
 the Worker, its D1 database and KV namespace in your Cloudflare account, sets up the tables,
 and connects the repository so every push redeploys. Then:
 
@@ -297,6 +298,12 @@ extension/src/              the popup, settings and manage pages; extension/publ
 
 To change a colour, size or font, update `design/tokens.json` and run `npm run tokens`;
 `npm run check` fails if `tokens.css` is out of date.
+
+**Commit the server UI's build.** `server/public/_/` is checked in, because the Deploy to
+Cloudflare button copies only `server/` and so cannot build the UI itself. After changing
+anything under `web/` or `ui/`, run `npm run build` and commit `server/public/_/` with your
+change; CI fails if it is out of date. The build is the same on every machine (Svelte's scoped
+class names come from the CSS, not the file path), so it only changes when the UI does.
 
 ### API
 
