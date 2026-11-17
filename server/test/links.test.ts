@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import { _resetMemCache, resolveTarget } from "../src/links";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { _resetMemCache, cacheSeconds, resolveTarget } from "../src/links";
 import { call, env } from "./helpers";
 
 const create = (slug: string, url: string, as?: string) => call("/_/api/links", { method: "POST", body: { slug, url }, as });
@@ -130,5 +130,59 @@ describe("api", () => {
     expect(res.status).toBe(200);
     const nonce = /script-src 'nonce-([^']+)'/.exec(res.headers.get("content-security-policy")!)![1];
     expect(await res.text()).toContain(`<script nonce="${nonce}">`);
+  });
+});
+
+describe("redirect cache TTL", () => {
+  const clock = (t: number) => vi.spyOn(Date, "now").mockReturnValue(t);
+  const T0 = 1_800_000_000_000;
+  // Change a link behind the cache's back (another isolate or a direct DB edit), clearing KV,
+  // so only this isolate's memory still holds the old destination.
+  const changeBehindCache = async (slug: string, url: string) => {
+    await env.DB.prepare("UPDATE links SET url = ? WHERE slug = ?").bind(url, slug).run();
+    await env.CACHE.delete(`l:${slug}`);
+  };
+  const where = async (slug: string, e: Record<string, string> = {}) => (await call(`/${slug}`, { env: e })).headers.get("location");
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it("reads REDIRECT_CACHE_SECONDS, clamped, defaulting to 30", () => {
+    const s = (v?: string) => cacheSeconds({ REDIRECT_CACHE_SECONDS: v } as never);
+    expect([s(), s(""), s("abc"), s("-5"), s("0"), s("12.9"), s("99999")]).toEqual([30, 30, 30, 30, 0, 12, 3600]);
+  });
+
+  it("serves the cached destination until the TTL runs out", async () => {
+    clock(T0);
+    await create("ttl", "https://old.test/");
+    await changeBehindCache("ttl", "https://new.test/");
+    clock(T0 + 29_000);
+    expect(await where("ttl")).toBe("https://old.test/");
+    clock(T0 + 31_000);
+    expect(await where("ttl")).toBe("https://new.test/");
+  });
+
+  it("honours a custom TTL, and 0 turns the memory layer off", async () => {
+    const ten = { REDIRECT_CACHE_SECONDS: "10" };
+    clock(T0);
+    await call("/_/api/links", { method: "POST", body: { slug: "short", url: "https://old.test/" }, env: ten });
+    await changeBehindCache("short", "https://new.test/");
+    clock(T0 + 11_000);
+    expect(await where("short", ten)).toBe("https://new.test/");
+
+    const off = { REDIRECT_CACHE_SECONDS: "0" };
+    await call("/_/api/links", { method: "POST", body: { slug: "off", url: "https://old.test/" }, env: off });
+    await changeBehindCache("off", "https://new.test/");
+    expect(await where("off", off)).toBe("https://new.test/");
+  });
+
+  it("forgets unknown names after 5 seconds, so new links show up quickly", async () => {
+    clock(T0);
+    expect(await where("soon")).toBe("/_/?new=soon");
+    // Created through another isolate: this one's memory still says "unknown".
+    await env.DB.exec("INSERT INTO links (slug,url,owner,created_at,updated_at) VALUES ('soon','https://soon.test/','a@b.c',1,1)");
+    clock(T0 + 4_000);
+    expect(await where("soon")).toBe("/_/?new=soon");
+    clock(T0 + 6_000);
+    expect(await where("soon")).toBe("https://soon.test/");
   });
 });

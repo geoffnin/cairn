@@ -88,6 +88,7 @@ pass group membership into the Access token (as an OIDC claim or SAML attribute 
 | `ADMIN_GROUPS` | Comma-separated group names from the token's `groups` (see above) |
 | `ALLOWED_EMAIL_DOMAINS` | Only these email domains may use Cairn, e.g. `example.com,example.co.uk`, on top of the Access policy. Checked on every request |
 | `METRICS_DASHBOARD_URL` | Where each link's Metrics link goes (see below) |
+| `REDIRECT_CACHE_SECONDS` | How long each Worker instance reuses a redirect, 0-3600, default 30. `0` turns this cache off |
 
 No secrets are needed: Cairn holds no passwords, client secrets or signing keys.
 
@@ -230,8 +231,11 @@ All routes need a Cloudflare Access session. Writes need the header `X-Cairn-Req
 
 ## Good to know
 
-- **Edits take up to a minute to reach everyone.** Redirects are cached in memory (30 seconds)
-  and in KV (which takes up to about 60 seconds to propagate worldwide).
+- **Edits take up to about 90 seconds to reach everyone.** Each Worker instance reuses a redirect
+  it has looked up for `REDIRECT_CACHE_SECONDS` (default 30), and KV takes up to about a minute
+  to update in every Cloudflare location. A newly created link shows up within about 5 seconds
+  for someone who tried the name just before. Lower the setting (or set `0`) if edits must land
+  faster; the cost is more KV reads, which are cheap.
 - **Offboarding is done in Zero Trust.** Removing someone from your identity provider stops new
   sign-ins. To end sessions that are already open, revoke the person's sessions from their
   entry in the Zero Trust users list. Otherwise they last until the Access session duration runs out.

@@ -1,5 +1,5 @@
 // Link storage (D1) with a two-level read cache for the redirect hot path:
-//   L1  per-isolate memory, 30s TTL   - free, absorbs bursts
+//   L1  per-isolate memory            - free, absorbs bursts; REDIRECT_CACHE_SECONDS (default 30)
 //   L2  Workers KV, written through   - edge-local reads, no D1 round trip
 //   L3  D1                            - source of truth
 import type { Env, Link } from "./types";
@@ -7,7 +7,10 @@ import { nowSeconds } from "./util";
 
 export const PLACEHOLDER = "{*}";
 const SLUG_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
-const MEM_TTL_MS = 30_000;
+const DEFAULT_CACHE_SECONDS = 30;
+const MAX_CACHE_SECONDS = 3600;
+/** Unknown names are remembered briefly, so a link someone just created shows up quickly. */
+const MISS_CACHE_SECONDS = 5;
 const MEM_MAX = 2000;
 const KV_TTL_S = 7 * 24 * 3600;
 
@@ -73,9 +76,21 @@ export function resolveTarget(target: string, rest: string, search: string): str
 
 const mem = new Map<string, { url: string | null; exp: number }>();
 
-function memSet(slug: string, url: string | null): void {
-  if (mem.size >= MEM_MAX) mem.delete(mem.keys().next().value!);
-  mem.set(slug, { url, exp: Date.now() + MEM_TTL_MS });
+/** How long this isolate trusts a cached redirect: REDIRECT_CACHE_SECONDS, 0-3600, default 30. */
+export function cacheSeconds(env: Env): number {
+  const raw = env.REDIRECT_CACHE_SECONDS?.trim();
+  const n = raw ? Number(raw) : NaN;
+  return Number.isFinite(n) && n >= 0 ? Math.min(Math.floor(n), MAX_CACHE_SECONDS) : DEFAULT_CACHE_SECONDS;
+}
+
+function memSet(env: Env, slug: string, url: string | null): void {
+  const ttl = url === null ? Math.min(MISS_CACHE_SECONDS, cacheSeconds(env)) : cacheSeconds(env);
+  if (ttl === 0) {
+    mem.delete(slug);
+    return;
+  }
+  if (mem.size >= MEM_MAX && !mem.has(slug)) mem.delete(mem.keys().next().value!);
+  mem.set(slug, { url, exp: Date.now() + ttl * 1000 });
 }
 
 async function kvSet(env: Env, slug: string, url: string | null): Promise<void> {
@@ -105,7 +120,7 @@ export async function lookupTarget(env: Env, ctx: ExecutionContext, slug: string
     // Misses are cached in memory only: keeps KV writes (the scarce free-tier resource) for real links.
     if (url !== null) ctx.waitUntil(kvSet(env, slug, url));
   }
-  memSet(slug, url);
+  memSet(env, slug, url);
   return url;
 }
 
@@ -146,7 +161,7 @@ export async function createLink(
     .bind(link.slug, link.url, link.description, link.owner, now, now)
     .run();
   if (!res.meta.changes) return null;
-  memSet(link.slug, link.url);
+  memSet(env, link.slug, link.url);
   await kvSet(env, link.slug, link.url);
   return getLink(env, link.slug);
 }
@@ -159,14 +174,14 @@ export async function updateLink(
   await env.DB.prepare("UPDATE links SET url = ?, description = ?, owner = ?, updated_at = ? WHERE slug = ?")
     .bind(patch.url, patch.description, patch.owner, nowSeconds(), slug)
     .run();
-  memSet(slug, patch.url);
+  memSet(env, slug, patch.url);
   await kvSet(env, slug, patch.url);
   return getLink(env, slug);
 }
 
 export async function deleteLink(env: Env, slug: string): Promise<void> {
   await env.DB.prepare("DELETE FROM links WHERE slug = ?").bind(slug).run();
-  memSet(slug, null);
+  memSet(env, slug, null);
   await kvSet(env, slug, null);
 }
 

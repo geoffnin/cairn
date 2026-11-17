@@ -61,6 +61,11 @@
     "ALLOWED_EMAIL_DOMAINS": "",
 
 
+    // How long each Worker instance reuses a redirect it has looked up, in seconds (0-3600).
+    // After an edit, other instances can send people to the old destination for up to this
+    // long, plus about a minute for KV to update everywhere. 0 turns this layer off.
+    "REDIRECT_CACHE_SECONDS": "30",
+
     // --- link metrics (optional) ---
     // Where each link's "Metrics" link goes, typically a dashboard built on the
     // "cairn.link.click" log events. {slug} is replaced with the link's name, e.g.

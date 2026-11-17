@@ -15,6 +15,7 @@ export interface Env {
 
 
   METRICS_DASHBOARD_URL?: string;
+  REDIRECT_CACHE_SECONDS?: string;
 }
 
 export interface User {
