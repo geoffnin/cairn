@@ -10,8 +10,8 @@
 </script>
 
 <Story name="Local">
-  {#snippet template(args)}<Frame><PopupFrame {...args}><p>The state's content.</p></PopupFrame></Frame>{/snippet}
+  {#snippet template(args)}<Frame><PopupFrame title={args.title} where={args.where} links={args.links}><p>The state's content.</p></PopupFrame></Frame>{/snippet}
 </Story>
 <Story name="Remote" args={{ where: { server: "go.acme.com" } }}>
-  {#snippet template(args)}<Frame><PopupFrame {...args}><p>The state's content.</p></PopupFrame></Frame>{/snippet}
+  {#snippet template(args)}<Frame><PopupFrame title={args.title} where={args.where} links={args.links}><p>The state's content.</p></PopupFrame></Frame>{/snippet}
 </Story>
