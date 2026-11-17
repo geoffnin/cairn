@@ -15,6 +15,12 @@
 <Story name="Muted">
   {#snippet template(args)}<LinkButton onclick={args.onclick} muted>Settings</LinkButton>{/snippet}
 </Story>
+<Story name="Disabled, with href" play={async ({ canvas }) => {
+  await expect(canvas.queryByRole("link")).toBeNull();
+  await expect(canvas.getByRole("button", { name: "See your links" })).toBeDisabled();
+}}>
+  {#snippet template()}<LinkButton href="#links" disabled>See your links</LinkButton>{/snippet}
+</Story>
 <Story name="As a link">
   {#snippet template()}<LinkButton href="#links">See your links</LinkButton>{/snippet}
 </Story>
