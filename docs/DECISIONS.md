@@ -248,8 +248,8 @@ it access to the server's origin.
 
 ## D10. Count clicks in D1, off the request path
 
-**Date:** 2026-11-17 · **Status:** accepted; extended by D16 (the same count is also emitted as
-an OpenTelemetry metric)
+**Date:** 2026-11-17 · **Status:** accepted. Each click is also logged as an event (D17); the D1
+count remains what the UI shows.
 
 **Decision.** Each redirect increments `clicks` and sets `last_clicked_at` inside
 `ctx.waitUntil`, after the response is sent.
@@ -412,7 +412,7 @@ uses `same-origin`.
 
 ## D16. Emit clicks as an OpenTelemetry metric; link out to a dashboard
 
-**Date:** 2026-11-17 · **Status:** accepted · **Extends:** D10
+**Date:** 2026-11-17 · **Status:** superseded by D17. The research below still informed it.
 
 **Context.** Click counts should be an OpenTelemetry metric, and "see metrics" for a link
 should open a configured dashboard. Two questions were open: can Cloudflare do this in-product,
@@ -488,6 +488,64 @@ and how deeply can a metrics platform be integrated back into Cairn.
 - *Analytics Engine as a second sink* would give time series with no outside account, queried
   through Cloudflare's SQL API. Worth adding if someone wants history without a metrics
   platform.
+
+---
+
+## D17. Clicks are structured log events, shipped by Cloudflare
+
+**Date:** 2026-11-17 · **Status:** accepted · **Supersedes:** D16
+
+**Decision.** Each visit to a link writes one log line: a single object with flat, dotted keys
+(`event.name: cairn.link.click`, `link.slug`, `link.found`, `link.target_host`,
+`link.passthrough`, `client.kind`, `client.country`). The Worker no longer sends OTLP metrics.
+Cloudflare's built-in OpenTelemetry *logs* export forwards the lines to the platform named in
+`observability.logs.destinations`, and the platform derives counts from them.
+`METRICS_DASHBOARD_URL` and the D1 counter are unchanged.
+
+**Why events instead of a metric.**
+
+- *No exporter in Cairn.* D16 needed a hand-written protobuf encoder, per-vendor auth secrets,
+  a temporality setting, and one outbound request per click. All of that is gone. Cloudflare
+  already ships logs off the request path and retries on its side.
+- *No temporality question.* A counter must be cumulative or delta, and platforms disagree on
+  which they accept. Counting log events works the same everywhere.
+- *More questions answerable.* A metric with one label answers "how many clicks per link". The
+  event can also say which names people try that do not exist, whether the extension or a
+  plain browser was used, and from which country, without new code.
+- *Useful with no platform at all.* The events are queryable in Workers Logs in the Cloudflare
+  dashboard as soon as they are deployed.
+
+**Field choices.**
+
+- *Flat dotted keys* (`link.slug`, not `{link: {slug}}`), in OpenTelemetry attribute style, so
+  they stay addressable whether the platform turns them into attributes or parses a JSON body.
+- *One object argument to `console.log`*, not a string, so Workers Logs indexes each field.
+- *The destination host only, never the full URL*, and never the text passed through after the
+  name or the query string. These can carry document IDs, search terms or tokens.
+- *No user identity.* "Who used which link" is a privacy decision a company should make
+  deliberately. Adding `user.email` is a one-line change if wanted.
+- *Misses are logged* (`link.found: false`); visits by people who are not signed in are not, as
+  those never reach the lookup.
+
+**Trade-offs.**
+
+- *Exactness depends on sampling.* Counts are exact only with
+  `observability.logs.head_sampling_rate: 1`, which is the configured default.
+- *Volume.* One log line per visit, plus Cloudflare's own invocation log line unless
+  `invocation_logs` is turned off. Log-priced platforms charge for both; at go-link volumes this
+  is small, but it scales with use in a way a pre-aggregated metric does not.
+- *Cost.* Cloudflare may require the Workers Paid plan to export to a third party; check
+  current pricing. Workers Logs in the dashboard is available without an export.
+- *Not verified here.* Cloudflare's documentation site is blocked from the environment this was
+  built in. The configuration was checked against Wrangler's own schema and a dry-run deploy,
+  and the event format against local `wrangler dev` output. How Cloudflare maps the object's
+  fields into the exported OTLP record (attributes or JSON body) was not confirmed against a
+  live destination; the README asks deployers to check one record before building dashboards.
+
+**What changed in the code.** `src/otel.ts` and its tests were removed. `src/events.ts` builds
+and logs the event and holds `metricsUrl`. `recordClick` is back to a plain D1 update. The
+`OTEL_*` settings were removed from `wrangler.jsonc`, and an `observability.logs` block was
+added.
 
 ---
 

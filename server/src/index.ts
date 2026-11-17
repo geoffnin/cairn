@@ -1,5 +1,6 @@
 import { handleApi } from "./api";
 import { AuthError, authenticate, handleCallback, handleLogin, handleLogout, mode } from "./auth";
+import { clickEvent, logClick } from "./events";
 import { handleExtensionConnect, handleExtensionDone, handleExtensionToken } from "./extauth";
 import { lookupTarget, recordClick, resolveTarget } from "./links";
 import type { Env } from "./types";
@@ -50,9 +51,14 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
   }
 
   const target = await lookupTarget(env, ctx, slug);
-  if (target === null) return redirect(`/_/?new=${encodeURIComponent(slug)}`);
+  if (target === null) {
+    logClick(clickEvent(req, slug, false, null, rest !== ""));
+    return redirect(`/_/?new=${encodeURIComponent(slug)}`);
+  }
+  const destination = resolveTarget(target, rest, url.search);
+  logClick(clickEvent(req, slug, true, destination, rest !== ""));
   recordClick(env, ctx, slug);
-  return redirect(resolveTarget(target, rest, url.search));
+  return redirect(destination);
 }
 
 export default {

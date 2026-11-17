@@ -95,44 +95,38 @@ AUD tag. No client secret or session secret is needed.
 
 ## Link metrics (optional)
 
-Every time a link is followed, Cairn can send an OpenTelemetry metric to the platform you
-already use, and the usage count shown beside each link becomes a shortcut to your dashboard.
+Every visit to a link writes one structured log line, the event `cairn.link.click`:
 
-**Metric:** `cairn.link.clicks`, a counter with the attribute `link.slug`, sent over OTLP/HTTP.
-
-```sh
-# in wrangler.jsonc "vars":
-#   "OTEL_EXPORTER_OTLP_ENDPOINT": "https://<your OTLP endpoint>"
-#   "METRICS_DASHBOARD_URL": "https://<your dashboard>?var-slug={slug}"
-npx wrangler secret put OTEL_EXPORTER_OTLP_HEADERS   # e.g. Authorization=Basic <token>
+```json
+{
+  "event.name": "cairn.link.click",
+  "link.slug": "roadmap",
+  "link.found": true,
+  "link.target_host": "docs.example.com",
+  "link.passthrough": false,
+  "client.kind": "extension",
+  "client.country": "GB"
+}
 ```
 
-| Variable | Purpose |
-|---|---|
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | Base OTLP/HTTP URL; `/v1/metrics` is appended. Or set `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` to the full URL |
-| `OTEL_EXPORTER_OTLP_HEADERS`* | Auth headers as `name=value,name2=value2` |
-| `OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE` | `cumulative` (default: running total per link) or `delta` (a 1 per click) |
-| `OTEL_SERVICE_NAME` | Reported as `service.name`, default `cairn` |
-| `METRICS_DASHBOARD_URL` | Where a link's usage count points. `{slug}` becomes the link name |
+`link.found: false` means someone tried a name that does not exist yet, which tells you what
+links people expect. The event never contains the full destination URL or who clicked.
 
-Which setting for which platform (confirm the endpoint and header against your vendor's current
-OTLP docs; these are starting points):
+Cloudflare collects these lines for you. They are searchable in the dashboard under Workers
+Logs straight away. To get them into your own platform:
 
-| Platform | Temporality | Auth header |
-|---|---|---|
-| Grafana Cloud, or anything Prometheus-based | `cumulative` | `Authorization=Basic <base64 of instance-id:token>` |
-| Honeycomb | either | `x-honeycomb-team=<key>` |
-| New Relic | either (`delta` preferred) | `api-key=<licence key>` |
-| Datadog | `delta` | `dd-api-key=<key>` |
-| Dynatrace | `delta` (required) | `Authorization=Api-Token <token>` |
-| Your own OpenTelemetry Collector | either | whatever you configured |
+1. In the Cloudflare dashboard, add an OpenTelemetry **logs** destination for your platform
+   (its OTLP logs endpoint and auth header) and give it a name.
+2. Put that name in `observability.logs.destinations` in `wrangler.jsonc` and redeploy.
+3. In your platform, count events where `event.name = cairn.link.click`, grouped by `link.slug`.
+4. Optionally set `METRICS_DASHBOARD_URL` so the usage count beside each link opens your
+   dashboard. `{slug}` is replaced with the link name, for example
+   `https://your-stack.grafana.net/d/abc/cairn?var-slug={slug}`.
 
-On the dashboard side, make a variable for the link name and filter on `link.slug`; in Grafana
-that is a dashboard variable `slug`, and `METRICS_DASHBOARD_URL` ends in `?var-slug={slug}`.
-
-Cloudflare cannot do this part for you: its built-in OpenTelemetry export covers traces and logs
-but not custom metrics, and its own metrics store (Workers Analytics Engine) has no shareable
-dashboards. The reasoning is in [decision D16](docs/DECISIONS.md).
+Cairn itself sends nothing and holds no credentials for this; Cloudflare does the shipping.
+Exporting to a third party may need the Workers Paid plan, so check Cloudflare's current
+pricing. Keep `head_sampling_rate` at `1`, or counts will be sampled. The reasoning is in
+[decision D17](docs/DECISIONS.md).
 
 ## Install the extension
 
@@ -212,11 +206,13 @@ All routes need a signed-in session. Writes need the header `X-Cairn-Request: 1`
 - **Free-tier ceilings.** Click counting writes to D1 once per redirect (100k writes/day free),
   and KV allows 1,000 writes/day free, which bounds link edits plus first-time cache fills. The
   $5/month Workers plan lifts both well past company scale.
-- **Metrics are best effort.** A click is always counted in Cairn; if your metrics platform is
-  unreachable at that moment the data point is dropped, not retried.
+- **Check how your platform receives the event's fields.** Cloudflare forwards each event as an
+  OpenTelemetry log record. Whether the fields arrive as separate attributes or as a JSON body
+  your platform must parse was not confirmed against a live destination. Send one click and
+  look at the record before building a dashboard.
 - **Not yet proven against live services.** The test suite uses a fake identity provider and
   local D1/KV. It has not yet been deployed to a real Cloudflare account, signed in through a
-  real Okta tenant, or sent metrics to a real OTLP platform.
+  real Okta tenant, or forwarded logs to a real OTLP platform.
 
 ## License
 

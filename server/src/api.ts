@@ -11,7 +11,7 @@ import {
   validateUrl,
 } from "./links";
 import type { Env, Link, User } from "./types";
-import { metricsUrl } from "./otel";
+import { metricsUrl } from "./events";
 import { revokeToken, revokeTokensFor } from "./tokens";
 import { bearerToken, json, linkPrefix } from "./util";
 
