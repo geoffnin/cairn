@@ -233,8 +233,8 @@ All routes need a Cloudflare Access session. Writes need the header `X-Cairn-Req
 
 - **Edits take up to about 90 seconds to reach everyone.** Each Worker instance reuses a redirect
   it has looked up for `REDIRECT_CACHE_SECONDS` (default 30), and KV takes up to about a minute
-  to update in every Cloudflare location. Newly created links work immediately everywhere:
-  unknown names are never cached. Lower the setting (or set `0`) if edits must land
+  to update in every Cloudflare location. A newly created link shows up within about 5 seconds
+  for someone who tried the name just before. Lower the setting (or set `0`) if edits must land
   faster; the cost is more KV reads, which are cheap.
 - **Offboarding is done in Zero Trust.** Removing someone from your identity provider stops new
   sign-ins. To end sessions that are already open, revoke the person's sessions from their

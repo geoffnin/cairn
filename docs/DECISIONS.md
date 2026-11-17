@@ -62,8 +62,8 @@ pays a round trip. D3 exists to take that off the redirect path.
 
 ## D3. Cache redirects in two layers in front of D1
 
-**Date:** 2026-11-17 · **Status:** accepted; memory TTL made configurable and misses no longer
-cached (D24)
+**Date:** 2026-11-17 · **Status:** accepted; memory TTL made configurable and misses shortened
+by D24
 
 **Decision.** `lookupTarget` reads through three levels:
 
@@ -787,13 +787,13 @@ With one server the settings page reads as a single question: where do your link
 
 ---
 
-## D24. Configurable redirect cache TTL; unknown names are not cached
+## D24. Configurable redirect cache TTL; short-lived misses
 
 **Date:** 2026-11-17 · **Status:** accepted · **Amends:** D3
 
 **Decision.** The in-memory layer's TTL is `REDIRECT_CACHE_SECONDS`: default 30, range 0 to
-3600, with `0` turning that layer off. Unknown names are not cached at all, in memory or in KV:
-every lookup of a name that does not exist goes to D1.
+3600, with `0` turning that layer off. Unknown names are remembered for at most 5 seconds
+(or not at all when the setting is 0), whatever the setting.
 
 **Why 30 seconds by default.** The memory layer saves a KV read, which is already fast and
 cheap, so a long TTL buys little. Its real job is absorbing bursts (a link pasted into a big
@@ -801,14 +801,12 @@ channel). Thirty seconds does that and keeps an edit's worst case at about 90 se
 propagation is added. Longer TTLs suit a company whose links almost never change; shorter ones
 suit people who edit a link and immediately test it from another browser.
 
-**Why unknown names are not cached.** Before this, an unknown name was remembered as long as a
-real link. Someone trying `go/x`, then a teammate creating it, meant that instance kept
-offering the "create" form for up to 30 seconds. A short miss TTL (5 seconds) was tried first;
-the product owner chose no caching at all, so a newly created link always works at once. The
-cost is one D1 read per visit to a name that does not exist, which is small: misses are rare
-next to real clicks, and D1's free tier allows 5 million reads a day. If someone scripted
-requests for random names, each would reach D1; Access in front limits that to signed-in
-people.
+**Why misses get their own, shorter TTL.** Before this, an unknown name was remembered as long
+as a real link. Someone trying `go/x`, then a teammate creating it, meant that instance kept
+offering the "create" form for up to 30 seconds. Five seconds still absorbs repeated typos.
+Not caching misses at all was tried and reverted: the 5 seconds is worth keeping to absorb
+repeated lookups of the same typo. Misses stay out of KV: KV entries cannot expire sooner than
+60 seconds, and every cached miss would spend one of the free tier's 1,000 daily writes.
 
 **What the setting does not control.**
 
