@@ -26,10 +26,11 @@
     },
     // Traces: the runtime records the request and every KV, D1 and fetch call; Cairn adds spans
     // for the redirect lookup (which cache layer answered), sign-in and API calls (src/tracing.ts).
-    // Sampled at 10%: traces are for latency, not counting. Send them to any OTLP endpoint the
-    // same way as logs: create a destination in the dashboard and list its name here.
+    // Disabled by default. Set enabled to true and redeploy to opt in at 10% sampling.
+    // Traces are for latency, not counting. To export, create a traces destination in the
+    // dashboard and list its name here, as for logs.
     "traces": {
-      "enabled": true,
+      "enabled": false,
       "head_sampling_rate": 0.1,
       "persist": true,
       "destinations": []       // e.g. ["grafana-traces"]

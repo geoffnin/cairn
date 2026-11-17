@@ -166,8 +166,10 @@ pricing. Keep `head_sampling_rate` at `1`, or counts will be sampled. The reason
 
 ## Tracing (optional)
 
-Traces are on, sampled at 10% of requests. Cloudflare records the request and every KV, D1 and
-outgoing call by itself; Cairn adds three spans:
+Tracing is disabled by default. To opt in, set `observability.traces.enabled` to `true` in
+`server/wrangler.jsonc` and redeploy. Set it back to `false` and redeploy to disable tracing.
+When enabled, traces are sampled at 10% of requests. Cloudflare records the request and every
+KV, D1 and outgoing call by itself; Cairn adds three spans:
 
 | Span | Attributes |
 |---|---|
@@ -180,7 +182,7 @@ replaced by `[email]`. No span carries an email address. A requested name that c
 a link (say `go/alice@example.com`) is recorded as `(invalid)`, in traces and in the
 `cairn.link.click` event alike, and API paths Cairn doesn't serve are labelled `unknown`.
 
-Traces are visible in the Cloudflare dashboard straight away. To send them to your own platform
+Once enabled, traces are visible in the Cloudflare dashboard. To send them to your own platform
 over OpenTelemetry, create a traces destination in the dashboard and add its name to
 `observability.traces.destinations` in `wrangler.jsonc`, as for logs. Change
 `head_sampling_rate` to trace more or fewer requests; it does not affect logs, which stay at

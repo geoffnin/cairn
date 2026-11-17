@@ -974,7 +974,10 @@ no visible owner, so it needs a decision on who inherits them first.
 
 **Date:** 2026-11-17 · **Status:** accepted
 
-**Decision.** `observability.traces` is enabled at 10% head sampling. The Workers runtime traces
+**Decision.** Tracing is optional and disabled by default (`observability.traces.enabled: false`).
+Operators can opt in by setting it to `true` in `server/wrangler.jsonc` and redeploying, or
+set it back to `false` and redeploy to stop collecting traces. When enabled, tracing uses 10%
+head sampling. The Workers runtime traces
 each request and every KV, D1 and `fetch` call itself. Cairn adds three spans through the
 runtime's own span API (`tracing.enterSpan` from `cloudflare:workers`), wrapped in
 `src/tracing.ts`:
@@ -996,7 +999,10 @@ duplicate what the runtime now does natively.
 
 **Choices.**
 
-- *10% sampling* because traces are for latency, not counting; logs stay at 100% for exact
+- *Opt-in collection* so deployments collect traces only when an operator needs latency
+  diagnostics. The existing span instrumentation remains available; the runtime records nothing
+  when tracing is disabled. Logs and click metrics remain enabled independently.
+- *10% sampling when enabled* because traces are for latency, not counting; logs stay at 100% for exact
   click counts (D17), and the two rates are independent.
 - *No emails in spans*, matching D27. Attributes are link names, layers, methods, routes and
   status codes. Nothing a visitor types is recorded verbatim: a requested name that is not valid
