@@ -1,16 +1,51 @@
 {
   "manifest_version": 3,
   "name": "Cairn Go Links",
-  "version": "0.3.0",
-  "description": "Open your team's short links from the address bar, e.g. go/roadmap.",
+  "version": "0.4.0",
+  "description": "Type go/name in the address bar to open short links, kept in this browser or on your team's Cairn server.",
   "minimum_chrome_version": "111",
-  "icons": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" },
-  "permissions": ["declarativeNetRequestWithHostAccess", "storage", "activeTab"],
-  "host_permissions": ["*://go/*"],
-  "optional_host_permissions": ["*://*/*"],
-  "background": { "service_worker": "background.js", "type": "module" },
-  "action": { "default_popup": "popup.html", "default_title": "Create a short link for this page" },
-  "options_ui": { "page": "options.html", "open_in_tab": true },
-  "omnibox": { "keyword": "go" },
-  "storage": { "managed_schema": "managed_schema.json" }
+  "icons": {
+    "16": "icons/16.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "permissions": [
+    "declarativeNetRequestWithHostAccess",
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "*://go/*"
+  ],
+  "optional_host_permissions": [
+    "*://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Create a go link for this page"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "omnibox": {
+    "keyword": "go"
+  },
+  "storage": {
+    "managed_schema": "managed_schema.json"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "go.html"
+      ],
+      "matches": [
+        "*://go/*"
+      ]
+    }
+  ]
 }

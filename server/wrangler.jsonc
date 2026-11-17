@@ -60,8 +60,6 @@
     // Access policy lets in. Checked on every request, on top of the Access policy.
     "ALLOWED_EMAIL_DOMAINS": "",
 
-    // The word typed before the slash: "go" gives go/roadmap. One DNS label (letters, digits, hyphens).
-    "LINK_PREFIX": "go",
 
     // --- link metrics (optional) ---
     // Where each link's "Metrics" link goes, typically a dashboard built on the

@@ -1,10 +1,10 @@
 import { handleApi } from "./api";
-import { AuthError, authenticate, handleLogout, mode } from "./auth";
+import { AuthError, authenticate, handleLogout } from "./auth";
 import { clickEvent, logEvent } from "./events";
 import { lookupTarget, resolveTarget } from "./links";
 import type { Env } from "./types";
 import { renderUi } from "./ui";
-import { json, linkPrefix, redirect } from "./util";
+import { json, redirect } from "./util";
 
 // Everything that is not a go link lives under /_/ ("_" can never start a link name).
 async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -14,20 +14,15 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
   if (path === "/_/healthz") return new Response("ok");
   if (path === "/robots.txt") return new Response("User-agent: *\nDisallow: /\n");
   if (path === "/favicon.ico") return new Response(null, { status: 204 });
-  // Meant to be public, so the extension can learn the prefix before anyone signs in. Behind
-  // Access that needs a Bypass policy for this path; see the README.
-  if (path === "/_/config") {
-    return json({ name: "Cairn", prefix: linkPrefix(env), auth: mode(env) }, 200, { "access-control-allow-origin": "*" });
-  }
   if (path === "/_/auth/logout") return handleLogout(req, env);
 
   const user = await authenticate(req, env);
   if (path.startsWith("/_/api/")) return handleApi(req, env, user, path.slice("/_/api".length));
   if (path === "/" || path === "/_") return redirect("/_/");
-  if (path === "/_/") return renderUi(linkPrefix(env));
+  if (path === "/_/") return renderUi();
   if (path.startsWith("/_/")) return new Response("Not found", { status: 404 });
 
-  // <prefix>/<slug>[/<rest>]
+  // go/<slug>[/<rest>]
   if (req.method !== "GET" && req.method !== "HEAD") return new Response("Method not allowed", { status: 405 });
   const cut = path.indexOf("/", 1);
   const rawSlug = cut === -1 ? path.slice(1) : path.slice(1, cut);

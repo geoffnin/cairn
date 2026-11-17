@@ -7,7 +7,8 @@ address bar and land on the right page. Cairn is two pieces:
   Access signs people in with your identity provider (Okta, Entra ID, Google, any SAML or OIDC
   provider). Links live in D1, redirects are cached in KV, and usage goes to Workers Logs.
 - **`extension/`** — a Chrome extension that makes `go/name` work in the address bar, with no
-  DNS or hosts-file changes.
+  DNS or hosts-file changes. It works on its own too: in **local mode** it keeps links in the
+  browser, with no server at all.
 
 It is built to cost nothing to run at company scale and to have no cold starts.
 The reasoning behind each choice is in [docs/DECISIONS.md](docs/DECISIONS.md).
@@ -24,8 +25,6 @@ The reasoning behind each choice is in [docs/DECISIONS.md](docs/DECISIONS.md).
                                      └─ 302 to the destination
 ```
 
-- The prefix is yours to choose: set `LINK_PREFIX` on the server and `acme/roadmap` works
-  instead of `go/roadmap`. The extension picks it up from the server.
 - `go/name/anything` passes `anything` through. Put `{*}` in a destination to choose where it
   goes: `https://tracker.example.com/browse/{*}` makes `go/bug/ABC-12` open that ticket.
 - A name nobody has claimed opens the "new link" form with the name filled in.
@@ -66,11 +65,7 @@ pricing for your headcount). In the Cloudflare dashboard, under **Zero Trust**:
    "emails ending in `@example.com`" or "members of the Engineering group".
 3. **Set the session duration** on the application. This is how often people sign in again;
    the maximum is one month.
-4. **Let the extension read the prefix:** add a second self-hosted application for
-   `go.example.com/_/config` with a single **Bypass** policy for Everyone. That endpoint only
-   reveals the link prefix. Without it, people must sign in to the server in a tab before the
-   extension can add it.
-5. **Copy the application's AUD tag** (Application Audience, on the first application's
+4. **Copy the application's AUD tag** (Application Audience, on the first application's
    overview) and your team domain (`your-team.cloudflareaccess.com`) into `wrangler.jsonc` as
    `ACCESS_AUD` and `ACCESS_TEAM_DOMAIN`, then `npm run deploy` again.
 
@@ -92,7 +87,6 @@ pass group membership into the Access token (as an OIDC claim or SAML attribute 
 | `ADMIN_EMAILS` | Comma-separated emails who can edit any link |
 | `ADMIN_GROUPS` | Comma-separated group names from the token's `groups` (see above) |
 | `ALLOWED_EMAIL_DOMAINS` | Only these email domains may use Cairn, e.g. `example.com,example.co.uk`, on top of the Access policy. Checked on every request |
-| `LINK_PREFIX` | The word before the slash, default `go`. Letters, digits and hyphens |
 | `METRICS_DASHBOARD_URL` | Where each link's Metrics link goes (see below) |
 
 No secrets are needed: Cairn holds no passwords, client secrets or signing keys.
@@ -160,21 +154,29 @@ pricing. Keep `head_sampling_rate` at `1`, or counts will be sampled. The reason
 ## Install the extension
 
 **Try it:** open `chrome://extensions`, turn on Developer mode, choose **Load unpacked** and pick
-the `extension/` folder. The settings page opens.
+the `extension/` folder. The settings page opens with **local mode** selected, so `go/` links
+work straight away, stored in this browser.
 
-1. Enter your server URL and choose **Add server**.
-2. Allow the permission Chrome asks for (access to your server, and to your prefix if it is not
-   `go`).
+**Local mode** keeps links in this Chrome profile only (`chrome.storage.local`): no server, no
+sign-in, nothing shared and nothing synced to other devices. Links behave exactly as on a server,
+including `{*}` pass-through. An unknown name opens the extension's own "new link" page, and
+**Manage links** in settings lists, searches, edits and deletes them. There is no import or
+export yet, so links made in local mode stay in local mode.
+
+**To use a company server instead:**
+
+1. In settings, enter the server URL and choose **Add server**.
+2. Allow the permission Chrome asks for, so the extension can reach your server.
 3. If you are not signed in yet, a tab opens on the server and Cloudflare Access asks you to sign
    in with your company account. After that, links, the toolbar popup and address-bar search
    all use that sign-in until the Access session expires.
 
-You can add more than one server (say, staging and production) and pick which one is in use
-from the settings page or the toolbar popup. Only the selected server's prefix redirects.
+You can add more than one server (say, staging and production) and switch between them and
+local mode in settings or in the toolbar popup. Only the selected one handles `go/` links.
 
 **Roll it out:** zip the `extension/` folder and publish it (unlisted or private) on the Chrome
 Web Store, then force-install it by policy. Set the server URL for everyone with a managed
-storage policy; people then only need to sign in:
+storage policy; people then only need to sign in, and local mode is not offered:
 
 ```json
 {
@@ -188,10 +190,11 @@ storage policy; people then only need to sign in:
 
 ### Using it
 
-- Type **`go/name`** in the address bar (or your own prefix).
-- Or type **`go`**, press space, and start typing to search link names. This keyword is always
-  `go`, whatever your prefix; change `omnibox.keyword` in `manifest.json` for a custom build.
-- Click the toolbar button to create a link for the page you are on.
+- Type **`go/name`** in the address bar.
+- Or type **`go`**, press space, and start typing to search link names.
+- Click the toolbar button to create a link for the page you are on. It saves wherever links
+  currently come from (this browser or your server); if you have more than one, the popup lets
+  you pick.
 
 If Chrome runs a web search the first time you type `go/name`, type `go/name/` (trailing slash)
 once, or use the `go` + space form; Chrome then remembers it as an address.
@@ -205,6 +208,8 @@ npm run migrate:local
 npm run dev                      # http://localhost:8787
 npm test                         # runs in the Workers runtime with local D1 and KV
 npm run typecheck
+
+cd ../extension && npm test      # the extension's link rules, shared with the server's
 ```
 
 Cloudflare Access does not run locally, so `dev` mode signs you in as a fixed user, and only on
@@ -222,7 +227,6 @@ All routes need a Cloudflare Access session. Writes need the header `X-Cairn-Req
 | `GET /_/api/links/:slug` | Read |
 | `PUT /_/api/links/:slug` | Update any of `{ url, description, owner }` |
 | `DELETE /_/api/links/:slug` | Delete |
-| `GET /_/config` | `{ prefix, auth }`, read by the extension. Bypass Access for this path |
 
 ## Good to know
 

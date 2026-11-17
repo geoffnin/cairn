@@ -72,7 +72,7 @@ const PAGE = /* html */ `<!doctype html>
 <main>
   <header>
     <h1>Cairn</h1>
-    <span class="hint">Short links for your team. Type <b>__PREFIX__/name</b> in the address bar.</span>
+    <span class="hint">Short links for your team. Type <b>go/name</b> in the address bar.</span>
     <span id="who"></span>
   </header>
 
@@ -81,7 +81,7 @@ const PAGE = /* html */ `<!doctype html>
     <form class="new" id="new">
       <div>
         <label for="n-slug">Name</label>
-        <div class="slug"><span>__PREFIX__/</span><input id="n-slug" type="text" required maxlength="64" autocomplete="off" spellcheck="false" placeholder="roadmap"></div>
+        <div class="slug"><span>go/</span><input id="n-slug" type="text" required maxlength="64" autocomplete="off" spellcheck="false" placeholder="roadmap"></div>
       </div>
       <div>
         <label for="n-url">Destination URL</label>
@@ -91,7 +91,7 @@ const PAGE = /* html */ `<!doctype html>
         <label for="n-desc">Description (optional)</label>
         <input id="n-desc" type="text" maxlength="500" autocomplete="off">
       </div>
-      <p class="hint wide">Use <code>{*}</code> to pass text through: <code>https://tracker.example.com/browse/{*}</code> makes <b>__PREFIX__/bug/ABC-12</b> open that ticket.</p>
+      <p class="hint wide">Use <code>{*}</code> to pass text through: <code>https://tracker.example.com/browse/{*}</code> makes <b>go/bug/ABC-12</b> open that ticket.</p>
       <div class="wide"><button class="primary" type="submit">Create link</button></div>
     </form>
     <p class="msg" id="n-msg" role="status"></p>
@@ -125,7 +125,7 @@ const PAGE = /* html */ `<!doctype html>
 
 <script nonce="__NONCE__">
 const $ = (id) => document.getElementById(id);
-const P = '__PREFIX__/';
+const P = 'go/';
 
 async function api(method, path, body) {
   let res;
@@ -244,9 +244,9 @@ load();
 </body>
 </html>`;
 
-export function renderUi(prefix: string): Response {
+export function renderUi(): Response {
   const nonce = randomToken(16);
-  return new Response(PAGE.replace("__NONCE__", nonce).replaceAll("__PREFIX__", prefix), {
+  return new Response(PAGE.replace("__NONCE__", nonce), {
     headers: {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store",

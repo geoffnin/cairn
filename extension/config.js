@@ -1,13 +1,16 @@
-// Shared state for the background worker, popup and settings page.
+// Which backend the extension uses, and talking to Cairn servers.
 //
-//   storage.sync    backends: [{ url, prefix }]   servers the user has added
-//                   active:   url                 the one currently in use
-//   storage.managed serverUrl                     set by policy; overrides and locks the choice
+//   storage.sync    backends: [{ url }]   Cairn servers the user has added
+//                   active:   url | "local"
+//   storage.managed serverUrl             set by policy; pins that server, hides local mode
 //
-// The extension holds no credentials. Each server sits behind Cloudflare Access, and the browser's
-// Access session (the CF_Authorization cookie) signs in redirects, the website and API calls.
+// The backend is either this browser (local mode, see local.js) or a Cairn server behind
+// Cloudflare Access. With no server chosen, local mode is used. The extension holds no
+// credentials: the browser's Access session signs in redirects and API calls.
 
-const PREFIX_RE = /^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$/;
+export const LOCAL = "local";
+export const LOCAL_BACKEND = Object.freeze({ kind: "local", label: "This browser" });
+const server = (url) => ({ kind: "server", url, label: new URL(url).host });
 
 /** Returns a clean origin ("https://go.example.com") or throws with a user-facing message. */
 export function normalizeServerUrl(raw) {
@@ -24,31 +27,7 @@ export function normalizeServerUrl(raw) {
   return url.origin;
 }
 
-/**
- * Ask a server which prefix it uses. Sends the Access session if there is one, so this works
- * either when /_/config has an Access Bypass policy or when the person is already signed in.
- */
-export async function fetchServerConfig(url) {
-  let res;
-  try {
-    res = await fetch(`${url}/_/config`, { credentials: "include", cache: "no-store" });
-  } catch {
-    // Behind Access with no Bypass for /_/config, signed-out requests are redirected to the
-    // Access login page on another origin, which fetch reports as a network error.
-    throw new Error(
-      `Could not read ${url}/_/config. Check the address. If the server is behind Cloudflare Access, ` +
-        "ask whoever runs it to add the Bypass policy for /_/config from Cairn's README, or sign in to the server in a tab and try again.",
-    );
-  }
-  const cfg = res.ok ? await res.json().catch(() => null) : null;
-  if (!cfg || typeof cfg.prefix !== "string" || !PREFIX_RE.test(cfg.prefix)) {
-    throw new Error(`${url} does not look like a Cairn server.`);
-  }
-  return { url, prefix: cfg.prefix };
-}
-
 // On a profile with no policy, storage.managed.get() can throw or never settle, so bound it.
-// If policy arrives later, storage.onChanged fires and the background worker re-syncs.
 async function managedServerUrl() {
   const managed = await Promise.race([
     chrome.storage.managed.get("serverUrl").catch(() => ({})),
@@ -61,42 +40,38 @@ async function managedServerUrl() {
   }
 }
 
-/** @returns {{ backends: object[], active: object|null, managed: boolean }} */
+/** @returns {{ choices: object[], active: object, managed: boolean }} choices = local (unless managed) + servers */
 export async function getState() {
   const [managedUrl, sync] = await Promise.all([managedServerUrl(), chrome.storage.sync.get(["backends", "active"])]);
-  let backends = Array.isArray(sync.backends) ? sync.backends : [];
-  let active;
   if (managedUrl) {
-    // Policy pins the server. Reuse what we learned about it earlier, else assume the default prefix.
-    active = backends.find((b) => b.url === managedUrl) || { url: managedUrl, prefix: "go" };
-    backends = [active];
-  } else {
-    active = backends.find((b) => b.url === sync.active) || backends[0] || null;
+    const pinned = server(managedUrl);
+    return { choices: [pinned], active: pinned, managed: true };
   }
-  return { backends, active, managed: !!managedUrl };
+  const servers = (Array.isArray(sync.backends) ? sync.backends : [])
+    .filter((b) => b && typeof b.url === "string")
+    .map((b) => server(b.url));
+  const active = servers.find((s) => s.url === sync.active) || LOCAL_BACKEND;
+  return { choices: [LOCAL_BACKEND, ...servers], active, managed: false };
 }
 
-/** Add a backend, or update what we know about one. Leaves the active choice alone unless asked. */
-export async function saveBackend(backend, { makeActive = false } = {}) {
+export const backendId = (b) => (b.kind === "local" ? LOCAL : b.url);
+
+export async function addServer(url) {
+  const { backends = [] } = await chrome.storage.sync.get("backends");
+  const next = [...backends.filter((b) => b.url !== url), { url }].sort((a, b) => a.url.localeCompare(b.url));
+  await chrome.storage.sync.set({ backends: next, active: url });
+}
+
+export async function removeServer(url) {
   const { backends = [], active } = await chrome.storage.sync.get(["backends", "active"]);
-  const clean = { url: backend.url, prefix: backend.prefix };
-  const next = [...backends.filter((b) => b.url !== clean.url), clean].sort((a, b) => a.url.localeCompare(b.url));
-  await chrome.storage.sync.set({ backends: next, active: makeActive || !active ? clean.url : active });
+  await chrome.storage.sync.set({ backends: backends.filter((b) => b.url !== url), active: active === url ? LOCAL : active });
 }
 
-export async function removeBackend(url) {
-  const { backends = [], active } = await chrome.storage.sync.get(["backends", "active"]);
-  const next = backends.filter((b) => b.url !== url);
-  await chrome.storage.sync.set({ backends: next, active: active === url ? (next[0]?.url ?? null) : active });
+export function setActive(id) {
+  return chrome.storage.sync.set({ active: id });
 }
 
-export function setActive(url) {
-  return chrome.storage.sync.set({ active: url });
-}
-
-export const originsFor = (backend) => [`${backend.url}/*`, `*://${backend.prefix}/*`];
 export const hasServerAccess = (backend) => chrome.permissions.contains({ origins: [`${backend.url}/*`] });
-export const hasAllAccess = (backend) => chrome.permissions.contains({ origins: originsFor(backend) });
 
 /** API call using the browser's Cloudflare Access session for the server. */
 export async function api(backend, method, path, body) {
@@ -110,18 +85,27 @@ export async function api(backend, method, path, body) {
     });
   } catch {
     // Signed out: Access redirects to its login page on another origin, which fetch cannot follow.
+    // (An unreachable server looks the same from here.)
     throw Object.assign(new Error("Not signed in."), { status: 401 });
   }
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw Object.assign(new Error(data.error || `Request failed (${res.status})`), { status: res.status });
+  const data = await res.json().catch(() => null);
+  if (!res.ok || data === null) {
+    throw Object.assign(new Error(data?.error || `${backend.label} is not responding like a Cairn server (${res.status}).`), {
+      status: res.status === 200 ? 502 : res.status,
+    });
+  }
   return data;
 }
 
-/** The signed-in person's email for this server, or null if not signed in (or unreachable). */
-export async function whoAmI(backend) {
+/**
+ * Who is signed in to this server: { email } when signed in, { signedOut: true } when Access
+ * wants a sign-in (or the server is unreachable), { error } when it is not a Cairn server.
+ */
+export async function probe(backend) {
   try {
-    return (await api(backend, "GET", "/me")).email;
-  } catch {
-    return null;
+    const me = await api(backend, "GET", "/me");
+    return typeof me.email === "string" ? { email: me.email } : { error: `${backend.label} is not a Cairn server.` };
+  } catch (err) {
+    return err.status === 401 ? { signedOut: true } : { error: err.message };
   }
 }

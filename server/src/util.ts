@@ -46,14 +46,3 @@ export function redirect(location: string, headers: [string, string][] = []): Re
   return new Response(null, { status: 302, headers: h });
 }
 
-/**
- * The word people type before the slash ("go" in go/roadmap). It is used as a hostname by the
- * browser extension, so it must be a single DNS label.
- */
-export function linkPrefix(env: { LINK_PREFIX?: string }): string {
-  const p = (env.LINK_PREFIX || "go").trim().toLowerCase();
-  if (!/^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$/.test(p)) {
-    throw new Error(`LINK_PREFIX "${env.LINK_PREFIX}" is invalid: use 1-32 letters, digits or hyphens.`);
-  }
-  return p;
-}

@@ -7,18 +7,15 @@
 <style>
   body { padding: 32px 16px; }
   main { max-width: 620px; margin: 0 auto; }
-  h2 { font-size: 14px; margin: 24px 0 8px; }
+  h2 { margin-top: 24px; }
   ul { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
   li { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
   li:last-child { border-bottom: 0; }
   li .info { flex: 1; min-width: 200px; }
-  li .host { font-weight: 600; overflow-wrap: anywhere; }
+  li .title { font-weight: 600; overflow-wrap: anywhere; }
   li .meta { font-size: 12px; color: var(--muted); }
   li .meta.warn { color: var(--danger); }
   li .acts { display: flex; gap: 6px; }
-  li.empty { color: var(--muted); }
-  button.quiet { background: none; color: var(--accent); border-color: var(--line); font-weight: 500; padding: 5px 10px; font-size: 13px; }
-  button.quiet.danger { color: var(--danger); }
   .add { display: flex; gap: 8px; }
   .add input { flex: 1; }
 </style>
@@ -26,22 +23,22 @@
 <body>
 <main>
   <h1>Cairn</h1>
-  <p class="hint" id="lead">Choose which Cairn server this browser uses. You sign in with your company account through Cloudflare Access.</p>
+  <p class="hint" id="lead">Choose where your go/ links live: in this browser only, or on your company's Cairn server.</p>
 
-  <h2>Servers</h2>
+  <h2>Use links from</h2>
   <ul id="list"></ul>
 
   <div id="add-section">
-    <h2><label for="server" style="all:unset">Add a server</label></h2>
+    <h2><label for="server" style="all:unset">Add a Cairn server</label></h2>
     <form id="add" class="add">
       <input id="server" type="text" required placeholder="https://go.example.com" spellcheck="false" autocomplete="off">
       <button id="add-btn" type="submit">Add server</button>
     </form>
-    <p class="hint">The address of your company's Cairn server. Ask whoever runs it if you are unsure.</p>
+    <p class="hint">Your company's Cairn server. You sign in with your company account through Cloudflare Access.</p>
   </div>
 
   <p class="msg" id="msg" role="status"></p>
-  <p class="hint" id="usage"></p>
+  <p class="hint">Type <b>go/name</b> in the address bar to open a link, or <b>go</b> then space to search.</p>
 </main>
 <script type="module" src="options.js"></script>
 </body>

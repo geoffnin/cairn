@@ -3,17 +3,18 @@
 <head>
 <meta charset="utf-8">
 <link rel="stylesheet" href="ui.css">
-<style>body { width: 340px; padding: 14px; }</style>
+<style>body { width: 340px; padding: 14px; } #where { margin: 0 0 4px; }</style>
 </head>
 <body>
-  <h1>New link</h1>
+  <h1>New go link</h1>
   <form id="form">
     <div id="backend-row" hidden>
-      <label for="backend">Server</label>
+      <label for="backend">Save to</label>
       <select id="backend"></select>
     </div>
+    <p class="hint" id="where"></p>
     <label for="slug">Name</label>
-    <div class="slug"><span id="prefix"></span><input id="slug" type="text" required maxlength="64" autocomplete="off" spellcheck="false" autofocus></div>
+    <div class="slug"><span>go/</span><input id="slug" type="text" required maxlength="64" autocomplete="off" spellcheck="false" autofocus></div>
     <label for="url">Destination URL</label>
     <input id="url" type="text" required maxlength="2048" spellcheck="false">
     <label for="desc">Description (optional)</label>

@@ -12,7 +12,7 @@ import {
 } from "./links";
 import type { Env, Link, User } from "./types";
 import { linkCreated, linkDeleted, linkUpdated, logEvent, metricsUrl } from "./events";
-import { json, linkPrefix } from "./util";
+import { json } from "./util";
 
 const canEdit = (user: User, link: Link) => user.isAdmin || link.owner === user.email;
 const present = (env: Env, user: User, link: Link) => ({
@@ -57,7 +57,6 @@ export async function handleApi(req: Request, env: Env, user: User, path: string
     const denied = checkCsrf(req);
     if (denied) return denied;
   }
-  const prefix = linkPrefix(env);
   try {
     if (path === "/me" && !write) return json(user);
 
@@ -80,7 +79,7 @@ export async function handleApi(req: Request, env: Env, user: User, path: string
           description: validateDescription(b.description),
           owner: user.email,
         });
-        if (!link) return json({ error: `${prefix}/${slug} already exists.` }, 409);
+        if (!link) return json({ error: `go/${slug} already exists.` }, 409);
         logEvent(linkCreated(req, user.email, slug, link));
         return json(present(env, user, link), 201);
       }
@@ -90,9 +89,9 @@ export async function handleApi(req: Request, env: Env, user: User, path: string
     if (m) {
       const slug = normalizeSlug(decodeURIComponent(m[1]!));
       const link = await getLink(env, slug);
-      if (!link) return json({ error: `${prefix}/${slug} does not exist.` }, 404);
+      if (!link) return json({ error: `go/${slug} does not exist.` }, 404);
       if (!write) return json(present(env, user, link));
-      if (!canEdit(user, link)) return json({ error: `Only ${link.owner} or an admin can change ${prefix}/${slug}.` }, 403);
+      if (!canEdit(user, link)) return json({ error: `Only ${link.owner} or an admin can change go/${slug}.` }, 403);
 
       if (req.method === "PUT") {
         const b = await body(req);

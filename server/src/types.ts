@@ -13,7 +13,6 @@ export interface Env {
 
   DEV_USER_EMAIL?: string;
 
-  LINK_PREFIX?: string;
 
   METRICS_DASHBOARD_URL?: string;
 }

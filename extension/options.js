@@ -1,14 +1,5 @@
-import {
-  fetchServerConfig,
-  getState,
-  hasAllAccess,
-  normalizeServerUrl,
-  originsFor,
-  removeBackend,
-  saveBackend,
-  setActive,
-  whoAmI,
-} from "./config.js";
+import { addServer, backendId, getState, hasServerAccess, normalizeServerUrl, probe, removeServer, setActive } from "./config.js";
+import { countLinks } from "./local.js";
 
 const $ = (id) => document.getElementById(id);
 const say = (text, isErr = false) => {
@@ -21,33 +12,16 @@ const el = (tag, props, ...kids) => {
   return e;
 };
 const button = (text, onclick, cls = "quiet") => el("button", { type: "button", className: cls, textContent: text, onclick });
-const host = (backend) => new URL(backend.url).host;
 
-// Chrome only shows a permission prompt in direct response to a click, so this is called from
-// click handlers (after at most one quick request to the server).
-async function grant(backend) {
-  try {
-    return await chrome.permissions.request({ origins: originsFor(backend) });
-  } catch {
-    throw new Error("Chrome did not show the permission prompt. Please click again.");
-  }
+// Must run straight from a click: Chrome only shows the permission prompt for a user gesture.
+function requestAccess(url) {
+  return chrome.permissions.request({ origins: [`${url}/*`] }).catch(() => false);
 }
 
-// Signing in is done by Cloudflare Access on the server's own pages; opening the site starts it.
-// Access remembers the session for as long as its application allows (up to a month).
-function signIn(backend) {
-  chrome.tabs.create({ url: `${backend.url}/_/` });
-  say(`Sign in to ${host(backend)} in the tab that just opened. This page updates when you come back.`);
-}
-
-async function connect(backend) {
-  if (!(await grant(backend))) {
-    say(`Without permission the extension cannot redirect ${backend.prefix}/ links to ${host(backend)}.`, true);
-    return;
-  }
-  const email = await whoAmI(backend);
-  if (email) say(`Ready, signed in as ${email}. Type ${backend.prefix}/ in the address bar.`);
-  else signIn(backend);
+// Cloudflare Access signs people in on the server's own pages; opening the site starts it.
+function signIn(b) {
+  chrome.tabs.create({ url: `${b.url}/_/` });
+  say(`Sign in to ${b.label} in the tab that just opened. This page updates when you come back.`);
 }
 
 const guarded = (fn) => async () => {
@@ -59,42 +33,63 @@ const guarded = (fn) => async () => {
   render();
 };
 
-async function row(backend, state) {
-  const isActive = state.active?.url === backend.url;
-  const access = await hasAllAccess(backend);
-  const email = access ? await whoAmI(backend) : null;
+async function serverStatus(b) {
+  if (!(await hasServerAccess(b))) return { text: "Needs permission to reach this server", warn: true, action: "grant" };
+  const p = await probe(b);
+  if (p.email) {
+    // Back from the sign-in tab: replace the "sign in" prompt with the outcome.
+    if ($("msg").textContent.startsWith(`Sign in to ${b.label}`)) say(`Signed in to ${b.label} as ${p.email}.`);
+    return { text: `Signed in as ${p.email}` };
+  }
+  if (p.signedOut) return { text: "Not signed in (or not reachable)", warn: true, action: "signin" };
+  return { text: p.error, warn: true };
+}
 
-  let status = `Links start with ${backend.prefix}/`;
-  let warn = false;
-  if (!access) [status, warn] = [`Needs permission to redirect ${backend.prefix}/ links`, true];
-  else if (email) status += ` · signed in as ${email}`;
-  else [status, warn] = [`${status} · not signed in`, true];
-
-  const radio = el("input", { type: "radio", name: "active", checked: isActive, disabled: state.managed });
-  radio.setAttribute("aria-label", `Use ${backend.url}`);
-  radio.onchange = guarded(() => setActive(backend.url));
-
+async function row(b, state) {
+  const isActive = backendId(b) === backendId(state.active);
   const acts = el("div", { className: "acts" });
-  if (!access) acts.append(button("Grant access", guarded(() => connect(backend))));
-  else if (!email) acts.append(button("Sign in", guarded(async () => signIn(backend))));
-  if (!state.managed) {
-    acts.append(
-      button(
-        "Remove",
-        guarded(async () => {
-          await removeBackend(backend.url);
-          say(`Removed ${host(backend)}.`);
-        }),
-        "quiet danger",
-      ),
-    );
+  let meta;
+
+  if (b.kind === "local") {
+    const n = await countLinks();
+    meta = { text: `Links are stored only in this Chrome profile · ${n} link${n === 1 ? "" : "s"}` };
+    acts.append(button("Manage links", () => chrome.tabs.create({ url: chrome.runtime.getURL("links.html") })));
+  } else {
+    meta = await serverStatus(b);
+    if (meta.action === "grant") {
+      acts.append(
+        button(
+          "Grant access",
+          guarded(async () => {
+            if (await requestAccess(b.url)) say(`Access granted for ${b.label}.`);
+          }),
+        ),
+      );
+    }
+    if (meta.action === "signin") acts.append(button("Sign in", () => signIn(b)));
+    if (!state.managed) {
+      acts.append(
+        button(
+          "Remove",
+          guarded(async () => {
+            await removeServer(b.url);
+            say(`Removed ${b.label}. Links now come from this browser.`);
+          }),
+          "quiet danger",
+        ),
+      );
+    }
   }
 
+  const radio = el("input", { type: "radio", name: "active", checked: isActive, disabled: state.managed });
+  radio.setAttribute("aria-label", `Use ${b.label}`);
+  radio.onchange = guarded(() => setActive(backendId(b)));
+  const title = b.kind === "local" ? "This browser (local mode)" : b.url;
   return el(
     "li",
     null,
     radio,
-    el("div", { className: "info" }, el("div", { className: "host", textContent: backend.url }), el("div", { className: `meta${warn ? " warn" : ""}`, textContent: status })),
+    el("div", { className: "info" }, el("div", { className: "title", textContent: title }), el("div", { className: `meta${meta.warn ? " warn" : ""}`, textContent: meta.text })),
     acts,
   );
 }
@@ -103,39 +98,38 @@ let renderSeq = 0;
 async function render() {
   const seq = ++renderSeq;
   const state = await getState();
-  const rows = await Promise.all(state.backends.map((b) => row(b, state)));
+  const rows = await Promise.all(state.choices.map((b) => row(b, state)));
   if (seq !== renderSeq) return; // a newer render finished first
-  $("list").replaceChildren(...(rows.length ? rows : [el("li", { className: "empty", textContent: "No servers yet. Add one below." })]));
+  $("list").replaceChildren(...rows);
   $("add-section").hidden = state.managed;
   if (state.managed) $("lead").textContent = "Your organization chose the Cairn server for this browser.";
-  const p = state.active?.prefix;
-  $("usage").textContent = p
-    ? `Type ${p}/name in the address bar to open a link. Typing "go", then space, searches link names.`
-    : "";
 }
 
 $("add").onsubmit = async (e) => {
   e.preventDefault();
+  let url;
+  try {
+    url = normalizeServerUrl($("server").value);
+  } catch (err) {
+    return say(err.message, true);
+  }
+  // Ask first, while the click still counts as a user gesture.
+  if (!(await requestAccess(url))) return say(`Cairn needs permission to reach ${new URL(url).host} to use it.`, true);
   $("add-btn").disabled = true;
   try {
-    const backend = await fetchServerConfig(normalizeServerUrl($("server").value));
-    await saveBackend(backend, { makeActive: true });
+    const b = { kind: "server", url, label: new URL(url).host };
+    const p = await probe(b);
+    if (p.error) return say(p.error, true);
+    await addServer(url);
     $("server").value = "";
-    await render();
-    await connect(backend);
-  } catch (err) {
-    say(err.message, true);
+    if (p.email) say(`Ready, signed in as ${p.email}. Type go/ in the address bar.`);
+    else signIn(b);
   } finally {
     $("add-btn").disabled = false;
     render();
   }
 };
 
-// Under policy, learn the pinned server's prefix so "Grant access" asks for the right thing.
-const initial = await getState();
-if (initial.managed && initial.active) {
-  await fetchServerConfig(initial.active.url).then((b) => saveBackend(b), () => {});
-}
 chrome.storage.onChanged.addListener(render);
 // Coming back from the sign-in tab: show the new state.
 window.addEventListener("focus", render);

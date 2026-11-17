@@ -305,6 +305,12 @@ to a login page on another site and sets a `SameSite=Lax` session cookie. It con
 extension's own API calls, including the popup's create from its `chrome-extension://` origin,
 carry that cookie, and covered sign-in, sign-out and a missing `/_/config` bypass.
 
+For D21 and D22 the extension was run in Chromium again: local mode from a fresh install
+(unknown name, creating from the popup and from the manage page, pass-through and query
+strings, edit, search, delete), then adding a server behind the imitation of Access, switching
+between it and local mode from the popup, and removing it. The shared link rules have unit
+tests (`extension/test`), run in CI.
+
 **Not yet verified.** Real Cloudflare Access (its cookie settings, session duration and group
 claims), Chrome's permission prompt itself (the test build pre-granted the hosts,
 since headless Chrome cannot click the prompt), a deployment against a live Cloudflare account and a live Okta tenant, and
@@ -314,7 +320,7 @@ how Chrome's address bar treats a typed `go/name` on first use (see README, "Usi
 
 ## D13. The server decides the prefix
 
-**Date:** 2026-11-17 · **Status:** accepted
+**Date:** 2026-11-17 · **Status:** superseded by D21. The prefix is fixed at `go`.
 
 **Decision.** `LINK_PREFIX` on the server (default `go`) sets the word typed before the slash.
 The server publishes it, with its sign-in method, at the unauthenticated endpoint `/_/config`.
@@ -346,7 +352,8 @@ refuse to start serving rather than guess.
 
 ## D14. The extension can hold several servers; one is in use at a time
 
-**Date:** 2026-11-17 · **Status:** accepted
+**Date:** 2026-11-17 · **Status:** accepted; extended by D22 (this browser is one of the
+choices)
 
 **Decision.** The settings page keeps a list of servers. One is active; its prefix is the one
 that redirects. The active server can be changed in settings or from the toolbar popup. The
@@ -668,7 +675,7 @@ prompt if the provider's own session is still alive.
 
 **Consequences.**
 
-- *`/_/config` needs a Bypass policy.* The extension reads the prefix before anyone has signed
+- *(Removed by D21.)* *`/_/config` needs a Bypass policy.* The extension reads the prefix before anyone has signed
   in. Behind Access that request is redirected to the login page, so the README asks for a
   separate path-scoped Access application with a Bypass policy for `/_/config`. Without it, the
   extension tells people to sign in to the server in a tab first, which also works.
@@ -685,6 +692,68 @@ prompt if the provider's own session is still alive.
 
 **On user IDs** (open from the discussion of D19): in this setup the stable ID available is
 Access's own `sub` for the person, not the identity provider's. Events still carry emails.
+
+---
+
+## D21. The prefix is always `go`
+
+**Date:** 2026-11-17 · **Status:** accepted · **Supersedes:** D13
+
+**Decision.** `LINK_PREFIX` and the `/_/config` endpoint are removed. Links are always
+`go/name`, on the server, in the web UI and in the extension.
+
+**Why.** A custom prefix cost more than it gave:
+
+- The extension had to learn the prefix before anyone signed in. Behind Cloudflare Access that
+  needed a separate Bypass application for `/_/config`, which wrangler cannot create, so every
+  deployment had a manual Zero Trust step that was easy to miss.
+- Any prefix other than `go` needed an extra Chrome permission prompt, and a "Grant access"
+  recovery path when the prefix changed.
+- The address-bar keyword (`go` + space) could never follow the prefix anyway, since Chrome
+  fixes it in the manifest.
+
+With `go` fixed, the extension's permission to `*://go/*` ships in the manifest, the only
+permission requested at runtime is the server's own origin, and a server is checked by asking
+who is signed in (`/_/api/me`) instead of reading a public config endpoint.
+
+**Revisit if** a company already uses `go/` for something else on its network. Forking the
+extension and changing the two places it appears (`manifest.json` and the redirect rule in
+`background.js`) is the escape hatch.
+
+---
+
+## D22. Local mode: links stored in the browser
+
+**Date:** 2026-11-17 · **Status:** accepted · **Extends:** D14
+
+**Decision.** The extension can work with no server. "This browser" is one of the choices in
+settings and in the popup, alongside any Cairn servers, and it is the default until a server is
+chosen. Local links live in `chrome.storage.local` under one key.
+
+**How redirects work locally.** The single redirect rule points `go/<path>` at the extension's
+own `go.html#<path>` instead of a server. That page looks the name up and replaces itself with
+the destination, or with the extension's "new link" page if the name is unknown. Chrome allows
+a `declarativeNetRequest` redirect to an extension page with the path kept; this was checked in
+a test extension first. The page is web-accessible only to `go/` URLs.
+
+**Choices.**
+
+- *Same rules as the server.* Name validation, URL validation and `{*}` pass-through are ported
+  to `extension/golinks.js`. Its tests reuse the server's cases, so a link behaves the same in
+  either place.
+- *`storage.local`, not `storage.sync`.* Sync is capped at about 100 KB in total and 8 KB per
+  item, which a few hundred links would exceed, and conflicting edits across devices would need
+  merge rules. Local is per-profile and roomy.
+- *Local is the default.* A fresh install works immediately. Under an enterprise policy that
+  pins a server, local mode is not offered.
+- *No ownership, metrics or events.* There is one person; nothing is logged or sent anywhere.
+
+**Popup creation.** Creating a link from the toolbar popup already existed for servers. It now
+saves to whichever backend is active, locally or on the server, and shows a "Save to" choice
+when there is more than one.
+
+**Not built.** Import and export (for example, moving local links to a server), and syncing
+local links across devices.
 
 ---
 
