@@ -1,11 +1,11 @@
-import { api, getState, hasServerAccess } from "./config.js";
+import { api, getState, hasServerAccess, migrateSettings } from "./config.js";
 import { listLinks } from "./local.js";
 
 const REDIRECT_RULE = 1;
 const OLD_AUTH_RULE = 2; // from versions that held their own sign-in token; removed on sync
 
 // http(s)://go/<anything> is redirected before any DNS lookup happens:
-//   server mode -> <server>/<anything>; Cloudflare Access signs the navigation in.
+//   shared mode -> <server>/<anything>; Cloudflare Access signs the navigation in.
 //   local mode  -> this extension's go.html#<anything>, which looks the link up in local storage.
 async function syncRules() {
   const { active } = await getState();
@@ -26,12 +26,13 @@ async function syncRules() {
 chrome.runtime.onInstalled.addListener(async ({ reason }) => {
   // Earlier versions stored sign-in tokens here; Cloudflare Access replaces them.
   await chrome.storage.local.remove("tokens");
+  await migrateSettings();
   await syncRules();
   if (reason === "install") chrome.runtime.openOptionsPage();
 });
 chrome.runtime.onStartup.addListener(syncRules);
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "sync" && (changes.backends || changes.active)) syncRules();
+  if ((area === "sync" && (changes.mode || changes.serverUrl)) || area === "managed") syncRules();
 });
 
 // Address bar: "go<space>name".

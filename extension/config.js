@@ -1,14 +1,15 @@
-// Which backend the extension uses, and talking to Cairn servers.
+// Where links live, and talking to the Cairn server.
 //
-//   storage.sync    backends: [{ url }]   Cairn servers the user has added
-//                   active:   url | "local"
-//   storage.managed serverUrl             set by policy; pins that server, hides local mode
+//   storage.sync    mode:      "local" | "shared"
+//                   serverUrl: the company's Cairn server, used in shared mode
+//   storage.managed serverUrl  set by policy; forces shared mode with that server
 //
-// The backend is either this browser (local mode, see local.js) or a Cairn server behind
-// Cloudflare Access. With no server chosen, local mode is used. The extension holds no
-// credentials: the browser's Access session signs in redirects and API calls.
+// Local mode keeps links in this browser (local.js). Shared mode uses one Cairn server behind
+// Cloudflare Access. The extension holds no credentials: the browser's Access session signs in
+// redirects and API calls.
 
 export const LOCAL = "local";
+export const SHARED = "shared";
 export const LOCAL_BACKEND = Object.freeze({ kind: "local", label: "This browser" });
 const server = (url) => ({ kind: "server", url, label: new URL(url).host });
 
@@ -40,35 +41,50 @@ async function managedServerUrl() {
   }
 }
 
-/** @returns {{ choices: object[], active: object, managed: boolean }} choices = local (unless managed) + servers */
+/**
+ * @returns {{ mode: string, server: object|null, active: object, choices: object[], managed: boolean }}
+ * `choices` is what the popup can switch between: this browser, plus the server once one is set.
+ */
 export async function getState() {
-  const [managedUrl, sync] = await Promise.all([managedServerUrl(), chrome.storage.sync.get(["backends", "active"])]);
+  const [managedUrl, sync] = await Promise.all([managedServerUrl(), chrome.storage.sync.get(["mode", "serverUrl"])]);
   if (managedUrl) {
     const pinned = server(managedUrl);
-    return { choices: [pinned], active: pinned, managed: true };
+    return { mode: SHARED, server: pinned, active: pinned, choices: [pinned], managed: true };
   }
-  const servers = (Array.isArray(sync.backends) ? sync.backends : [])
-    .filter((b) => b && typeof b.url === "string")
-    .map((b) => server(b.url));
-  const active = servers.find((s) => s.url === sync.active) || LOCAL_BACKEND;
-  return { choices: [LOCAL_BACKEND, ...servers], active, managed: false };
+  let srv = null;
+  try {
+    srv = sync.serverUrl ? server(normalizeServerUrl(sync.serverUrl)) : null;
+  } catch {
+    /* ignore a bad stored value */
+  }
+  const mode = sync.mode === SHARED && srv ? SHARED : LOCAL;
+  return { mode, server: srv, active: mode === SHARED ? srv : LOCAL_BACKEND, choices: srv ? [LOCAL_BACKEND, srv] : [LOCAL_BACKEND], managed: false };
 }
 
-export const backendId = (b) => (b.kind === "local" ? LOCAL : b.url);
+export const backendId = (b) => (b.kind === "local" ? LOCAL : SHARED);
 
-export async function addServer(url) {
-  const { backends = [] } = await chrome.storage.sync.get("backends");
-  const next = [...backends.filter((b) => b.url !== url), { url }].sort((a, b) => a.url.localeCompare(b.url));
-  await chrome.storage.sync.set({ backends: next, active: url });
+/** Use this server for shared mode, and switch to it. */
+export function setServer(url) {
+  return chrome.storage.sync.set({ serverUrl: url, mode: SHARED });
 }
 
-export async function removeServer(url) {
-  const { backends = [], active } = await chrome.storage.sync.get(["backends", "active"]);
-  await chrome.storage.sync.set({ backends: backends.filter((b) => b.url !== url), active: active === url ? LOCAL : active });
+export function setMode(mode) {
+  return chrome.storage.sync.set({ mode: mode === SHARED ? SHARED : LOCAL });
 }
 
-export function setActive(id) {
-  return chrome.storage.sync.set({ active: id });
+/**
+ * Versions 0.2-0.4 kept a list of servers ({ backends, active }). Keep the one in use (or the
+ * first) as the shared server, and the mode that was in effect.
+ */
+export async function migrateSettings() {
+  const old = await chrome.storage.sync.get(["backends", "active", "serverUrl"]);
+  if (!Array.isArray(old.backends)) return;
+  const urls = old.backends.map((b) => b?.url).filter((u) => typeof u === "string");
+  const chosen = urls.includes(old.active) ? old.active : urls[0];
+  const update = { mode: urls.includes(old.active) ? SHARED : LOCAL };
+  if (chosen && !old.serverUrl) update.serverUrl = chosen;
+  await chrome.storage.sync.set(update);
+  await chrome.storage.sync.remove(["backends", "active"]);
 }
 
 export const hasServerAccess = (backend) => chrome.permissions.contains({ origins: [`${backend.url}/*`] });

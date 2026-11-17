@@ -163,16 +163,16 @@ including `{*}` pass-through. An unknown name opens the extension's own "new lin
 **Manage links** in settings lists, searches, edits and deletes them. There is no import or
 export yet, so links made in local mode stay in local mode.
 
-**To use a company server instead:**
+**Shared mode** uses your company's Cairn server instead, so everyone sees the same links:
 
-1. In settings, enter the server URL and choose **Add server**.
+1. In settings, under **Shared**, enter the server URL and choose **Use this server**.
 2. Allow the permission Chrome asks for, so the extension can reach your server.
 3. If you are not signed in yet, a tab opens on the server and Cloudflare Access asks you to sign
    in with your company account. After that, links, the toolbar popup and address-bar search
    all use that sign-in until the Access session expires.
 
-You can add more than one server (say, staging and production) and switch between them and
-local mode in settings or in the toolbar popup. Only the selected one handles `go/` links.
+There is one server at a time. Switch between this browser and shared in settings or in the
+toolbar popup; the other side's links are kept, just not used.
 
 **Roll it out:** zip the `extension/` folder and publish it (unlisted or private) on the Chrome
 Web Store, then force-install it by policy. Set the server URL for everyone with a managed
@@ -193,8 +193,8 @@ storage policy; people then only need to sign in, and local mode is not offered:
 - Type **`go/name`** in the address bar.
 - Or type **`go`**, press space, and start typing to search link names.
 - Click the toolbar button to create a link for the page you are on. It saves wherever links
-  currently come from (this browser or your server); if you have more than one, the popup lets
-  you pick.
+  currently come from (this browser or your server); once a server is set, the popup lets you
+  switch.
 
 If Chrome runs a web search the first time you type `go/name`, type `go/name/` (trailing slash)
 once, or use the `go` + space form; Chrome then remembers it as an address.

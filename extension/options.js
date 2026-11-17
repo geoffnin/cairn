@@ -1,4 +1,4 @@
-import { addServer, backendId, getState, hasServerAccess, normalizeServerUrl, probe, removeServer, setActive } from "./config.js";
+import { LOCAL, SHARED, getState, hasServerAccess, normalizeServerUrl, probe, setMode, setServer } from "./config.js";
 import { countLinks } from "./local.js";
 
 const $ = (id) => document.getElementById(id);
@@ -6,12 +6,7 @@ const say = (text, isErr = false) => {
   $("msg").textContent = text;
   $("msg").classList.toggle("err", isErr);
 };
-const el = (tag, props, ...kids) => {
-  const e = Object.assign(document.createElement(tag), props || {});
-  e.append(...kids);
-  return e;
-};
-const button = (text, onclick, cls = "quiet") => el("button", { type: "button", className: cls, textContent: text, onclick });
+const button = (text, onclick) => Object.assign(document.createElement("button"), { type: "button", className: "quiet", textContent: text, onclick });
 
 // Must run straight from a click: Chrome only shows the permission prompt for a user gesture.
 function requestAccess(url) {
@@ -19,93 +14,71 @@ function requestAccess(url) {
 }
 
 // Cloudflare Access signs people in on the server's own pages; opening the site starts it.
-function signIn(b) {
-  chrome.tabs.create({ url: `${b.url}/_/` });
-  say(`Sign in to ${b.label} in the tab that just opened. This page updates when you come back.`);
+function signIn(srv) {
+  chrome.tabs.create({ url: `${srv.url}/_/` });
+  say(`Sign in to ${srv.label} in the tab that just opened. This page updates when you come back.`);
 }
 
-const guarded = (fn) => async () => {
-  try {
-    await fn();
-  } catch (err) {
-    say(err.message, true);
-  }
-  render();
-};
-
-async function serverStatus(b) {
-  if (!(await hasServerAccess(b))) return { text: "Needs permission to reach this server", warn: true, action: "grant" };
-  const p = await probe(b);
+async function sharedStatus(srv) {
+  if (!(await hasServerAccess(srv))) return { text: "Needs permission to reach this server.", warn: true, action: "grant" };
+  const p = await probe(srv);
   if (p.email) {
     // Back from the sign-in tab: replace the "sign in" prompt with the outcome.
-    if ($("msg").textContent.startsWith(`Sign in to ${b.label}`)) say(`Signed in to ${b.label} as ${p.email}.`);
-    return { text: `Signed in as ${p.email}` };
+    if ($("msg").textContent.startsWith(`Sign in to ${srv.label}`)) say(`Signed in to ${srv.label} as ${p.email}.`);
+    return { text: `Signed in as ${p.email}.` };
   }
-  if (p.signedOut) return { text: "Not signed in (or not reachable)", warn: true, action: "signin" };
+  if (p.signedOut) return { text: "Not signed in (or the server is not reachable).", warn: true, action: "signin" };
   return { text: p.error, warn: true };
 }
 
-async function row(b, state) {
-  const isActive = backendId(b) === backendId(state.active);
-  const acts = el("div", { className: "acts" });
-  let meta;
-
-  if (b.kind === "local") {
-    const n = await countLinks();
-    meta = { text: `Links are stored only in this Chrome profile · ${n} link${n === 1 ? "" : "s"}` };
-    acts.append(button("Manage links", () => chrome.tabs.create({ url: chrome.runtime.getURL("links.html") })));
-  } else {
-    meta = await serverStatus(b);
-    if (meta.action === "grant") {
-      acts.append(
-        button(
-          "Grant access",
-          guarded(async () => {
-            if (await requestAccess(b.url)) say(`Access granted for ${b.label}.`);
-          }),
-        ),
-      );
-    }
-    if (meta.action === "signin") acts.append(button("Sign in", () => signIn(b)));
-    if (!state.managed) {
-      acts.append(
-        button(
-          "Remove",
-          guarded(async () => {
-            await removeServer(b.url);
-            say(`Removed ${b.label}. Links now come from this browser.`);
-          }),
-          "quiet danger",
-        ),
-      );
-    }
-  }
-
-  const radio = el("input", { type: "radio", name: "active", checked: isActive, disabled: state.managed });
-  radio.setAttribute("aria-label", `Use ${b.label}`);
-  radio.onchange = guarded(() => setActive(backendId(b)));
-  const title = b.kind === "local" ? "This browser (local mode)" : b.url;
-  return el(
-    "li",
-    null,
-    radio,
-    el("div", { className: "info" }, el("div", { className: "title", textContent: title }), el("div", { className: `meta${meta.warn ? " warn" : ""}`, textContent: meta.text })),
-    acts,
-  );
-}
-
 let renderSeq = 0;
+let current = null; // state as last shown, so clicks can respond without waiting on storage
+
 async function render() {
   const seq = ++renderSeq;
   const state = await getState();
-  const rows = await Promise.all(state.choices.map((b) => row(b, state)));
+  const n = state.managed ? 0 : await countLinks();
+  const status = state.server ? await sharedStatus(state.server) : null;
   if (seq !== renderSeq) return; // a newer render finished first
-  $("list").replaceChildren(...rows);
-  $("add-section").hidden = state.managed;
-  if (state.managed) $("lead").textContent = "Your organization chose the Cairn server for this browser.";
+  current = state;
+
+  $("local-choice").hidden = state.managed;
+  $("local-meta").textContent = `Stored only in this Chrome profile, not shared or synced · ${n} link${n === 1 ? "" : "s"}`;
+  $("mode-local").checked = state.mode === LOCAL;
+  $("mode-shared").checked = state.mode === SHARED;
+  $("mode-shared").disabled = state.managed;
+  $("local-choice").classList.toggle("on", state.mode === LOCAL);
+  $("shared-choice").classList.toggle("on", state.mode === SHARED);
+
+  if (document.activeElement !== $("server")) $("server").value = state.server?.url ?? "";
+  $("server").disabled = $("save").disabled = state.managed;
+  $("save").hidden = state.managed;
+  if (state.managed) $("lead").textContent = "Your organization set up shared links for this browser.";
+
+  $("shared-meta").textContent = status?.text ?? "";
+  $("shared-meta").classList.toggle("warn", !!status?.warn);
+  const acts = [];
+  if (status?.action === "grant") {
+    acts.push(button("Grant access", async () => {
+      if (await requestAccess(state.server.url)) say(`Access granted for ${state.server.label}.`);
+      render();
+    }));
+  }
+  if (status?.action === "signin") acts.push(button("Sign in", () => signIn(state.server)));
+  $("shared-acts").replaceChildren(...acts);
 }
 
-$("add").onsubmit = async (e) => {
+$("manage").onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL("links.html") });
+$("mode-local").onchange = () => setMode(LOCAL).then(render);
+$("mode-shared").onchange = () => {
+  if (current?.server) return setMode(SHARED).then(render);
+  // Nothing to switch to yet: keep local mode until a server is saved.
+  $("mode-local").checked = true;
+  $("server").focus();
+  say("Enter your company's Cairn server address, then choose Use this server.");
+};
+
+$("server-form").onsubmit = async (e) => {
   e.preventDefault();
   let url;
   try {
@@ -115,17 +88,17 @@ $("add").onsubmit = async (e) => {
   }
   // Ask first, while the click still counts as a user gesture.
   if (!(await requestAccess(url))) return say(`Cairn needs permission to reach ${new URL(url).host} to use it.`, true);
-  $("add-btn").disabled = true;
+  $("save").disabled = true;
   try {
-    const b = { kind: "server", url, label: new URL(url).host };
-    const p = await probe(b);
+    const srv = { kind: "server", url, label: new URL(url).host };
+    const p = await probe(srv);
     if (p.error) return say(p.error, true);
-    await addServer(url);
-    $("server").value = "";
-    if (p.email) say(`Ready, signed in as ${p.email}. Type go/ in the address bar.`);
-    else signIn(b);
+    await setServer(url);
+    $("server").blur();
+    if (p.email) say(`Using ${srv.label}, signed in as ${p.email}. Type go/ in the address bar.`);
+    else signIn(srv);
   } finally {
-    $("add-btn").disabled = false;
+    $("save").disabled = false;
     render();
   }
 };

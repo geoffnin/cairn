@@ -1,4 +1,4 @@
-import { api, backendId, getState, hasServerAccess, setActive } from "./config.js";
+import { api, backendId, getState, hasServerAccess, setMode } from "./config.js";
 import { createLink } from "./local.js";
 
 const $ = (id) => document.getElementById(id);
@@ -48,7 +48,7 @@ $("form").onsubmit = async (e) => {
 };
 
 $("backend").onchange = async () => {
-  await setActive($("backend").value);
+  await setMode($("backend").value);
   state = getState();
   render(await state);
 };

@@ -305,6 +305,10 @@ to a login page on another site and sets a `SameSite=Lax` session cookie. It con
 extension's own API calls, including the popup's create from its `chrome-extension://` origin,
 carry that cookie, and covered sign-in, sign-out and a missing `/_/config` bypass.
 
+For D23 the run covered choosing shared before a server is set, setting the server and signing
+in, switching modes from settings and from the popup, and migrating both shapes of the old
+server list.
+
 For D21 and D22 the extension was run in Chromium again: local mode from a fresh install
 (unknown name, creating from the popup and from the manage page, pass-through and query
 strings, edit, search, delete), then adding a server behind the imitation of Access, switching
@@ -352,8 +356,7 @@ refuse to start serving rather than guess.
 
 ## D14. The extension can hold several servers; one is in use at a time
 
-**Date:** 2026-11-17 · **Status:** accepted; extended by D22 (this browser is one of the
-choices)
+**Date:** 2026-11-17 · **Status:** superseded by D23. One server at most, alongside local mode.
 
 **Decision.** The settings page keeps a list of servers. One is active; its prefix is the one
 that redirects. The active server can be changed in settings or from the toolbar popup. The
@@ -724,7 +727,7 @@ extension and changing the two places it appears (`manifest.json` and the redire
 
 ## D22. Local mode: links stored in the browser
 
-**Date:** 2026-11-17 · **Status:** accepted · **Extends:** D14
+**Date:** 2026-11-17 · **Status:** accepted; the choice of backends is simplified by D23
 
 **Decision.** The extension can work with no server. "This browser" is one of the choices in
 settings and in the popup, alongside any Cairn servers, and it is the default until a server is
@@ -754,6 +757,32 @@ when there is more than one.
 
 **Not built.** Import and export (for example, moving local links to a server), and syncing
 local links across devices.
+
+---
+
+## D23. Local or shared: one server, not a list
+
+**Date:** 2026-11-17 · **Status:** accepted · **Supersedes:** D14
+
+**Decision.** The extension offers exactly two modes: **this browser** (local, D22) and
+**shared**, which uses a single Cairn server. Settings show the two as a choice, with the
+server's URL entered inside the shared option. The popup's switch has at most those two
+entries. Storage is `{ mode, serverUrl }` in `storage.sync`.
+
+**Why.** A list of servers served staging-versus-production setups, which few companies running
+one go-link server need, and it cost a list UI, add/remove flows and a more complicated popup.
+With one server the settings page reads as a single question: where do your links live?
+
+**Details.**
+
+- *Shared can't be chosen before a server is set.* Picking it without one keeps local mode and
+  moves focus to the URL field.
+- *Switching keeps both sides.* Moving between local and shared changes which one answers `go/`;
+  local links stay in the browser and the server stays configured.
+- *Policy still wins.* A managed `serverUrl` forces shared mode and hides local mode.
+- *Migration.* Versions 0.2 to 0.4 stored `{ backends, active }`. On update the extension keeps
+  the server that was in use (or else the first one) as the shared server, keeps the mode that
+  was in effect, and removes the old keys. Any other servers in the list are dropped.
 
 ---
 
