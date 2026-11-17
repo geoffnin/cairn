@@ -1,4 +1,4 @@
-// Turns design/tokens.json (exported from the Cairn design system) into extension/ui/tokens.css.
+// Turns design/tokens.json (exported from the Cairn design system) into ui/src/styles/tokens.css.
 //
 //   node design/build-tokens.mjs           write tokens.css
 //   node design/build-tokens.mjs --check   exit 1 if tokens.css is out of date (CI)
@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 export const SOURCE = here("./tokens.json");
-export const OUTPUT = here("../extension/ui/tokens.css");
+export const OUTPUT = here("../ui/src/styles/tokens.css");
 
 const themed = (v) => v !== null && typeof v === "object";
 // "{moss}" refers to another colour token.
@@ -77,11 +77,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const css = buildTokensCss(JSON.parse(readFileSync(SOURCE, "utf8")));
   if (process.argv.includes("--check")) {
     if (readFileSync(OUTPUT, "utf8") !== css) {
-      console.error("extension/ui/tokens.css is out of date. Run: node design/build-tokens.mjs");
+      console.error("ui/src/styles/tokens.css is out of date. Run: node design/build-tokens.mjs");
       process.exit(1);
     }
   } else {
     writeFileSync(OUTPUT, css);
-    console.log("Wrote extension/ui/tokens.css");
+    console.log("Wrote ui/src/styles/tokens.css");
   }
 }

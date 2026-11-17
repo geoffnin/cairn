@@ -4,12 +4,16 @@
   "name": "cairn",
   "main": "src/index.ts",
   "compatibility_date": "2026-11-01",
-  // The web UI's stylesheet, fonts and images come from ../extension/ui, bundled into the Worker
-  // (src/assets.ts).
-  "rules": [
-    { "type": "Text", "globs": ["**/*.css", "**/*.svg"] },
-    { "type": "Data", "globs": ["**/*.woff2"] }
-  ],
+  // The web UI: static files built from ../web (npm run build:ui) into ./public/_/. Every request
+  // still goes to the Worker first, so sign-in is checked before any of them is served
+  // (src/ui.ts); the Worker then hands the request to the assets binding.
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "none"
+  },
 
   // The workers.dev URL gives a fresh install a working address before any custom domain exists.
   // Turning on Cloudflare Access for the Worker protects it, and Cairn refuses every request that

@@ -4,76 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Links in this browser</title>
-<link rel="stylesheet" href="ui/cairn.css">
-<script src="ui/display.js"></script>
+<!-- Theme and density before first paint; a plain script so it blocks. -->
+<script src="/display.js"></script>
+<script type="module" src="./src/links.ts"></script>
 </head>
-<body>
-<main class="cn-page">
-  <header class="cn-header">
-    <span class="cn-brand"><svg class="cn-mark" viewBox="0 0 560 540" aria-hidden="true"><polygon class="f-peach" points="363,5 180,88 75,268 298,145"/><polygon class="f-umber" points="363,5 505,235 298,145"/><polygon class="f-sage-light" points="298,145 505,235 205,407"/><polygon class="f-sage" points="75,268 298,145 205,407 48,475 8,437"/><polygon class="f-terracotta" points="505,235 552,403 448,526 405,292"/><polygon class="f-pine" points="205,407 405,292 448,526"/><polygon class="f-forest" points="48,475 205,407 448,526 95,530"/></svg>cairn</span>
-    <span class="cn-tagline">Type <span class="cn-go">name</span> in the address bar.</span>
-    <span class="cn-who">Links in this browser · <a href="options.html">Settings</a></span>
-  </header>
-
-  <section class="cn-card">
-    <h2>New link</h2>
-    <form id="new" class="cn-form">
-      <div class="cn-form-grid">
-        <label class="cn-field">
-          <span class="cn-label">Name</span>
-          <span class="cn-gofield"><input id="n-slug" class="cn-input" type="text" required maxlength="64" autocomplete="off" spellcheck="false" placeholder="roadmap"></span>
-        </label>
-        <label class="cn-field">
-          <span class="cn-label">Destination URL</span>
-          <input id="n-url" class="cn-input is-mono" type="text" required maxlength="2048" autocomplete="off" spellcheck="false" placeholder="https://docs.example.com/roadmap">
-        </label>
-        <label class="cn-field is-wide">
-          <span class="cn-label">Description (optional)</span>
-          <input id="n-desc" class="cn-input" type="text" maxlength="500" autocomplete="off">
-        </label>
-      </div>
-      <p class="cn-hint">Use <code>{*}</code> to pass text through: <code>https://tracker.example.com/browse/{*}</code> makes <span class="cn-go">bug/ABC-12</span> open that ticket.</p>
-      <div class="cn-form-foot">
-        <button class="cn-btn is-primary" type="submit">Create link</button>
-        <p class="cn-status" id="n-msg" role="status"></p>
-      </div>
-    </form>
-  </section>
-
-  <section class="cn-card cn-form">
-    <div class="cn-search">
-      <input id="q" class="cn-input" type="search" placeholder="Search names, URLs and descriptions" aria-label="Search links" autocomplete="off" aria-keyshortcuts="/">
-      <span class="cn-kbd" aria-hidden="true">/</span>
-    </div>
-    <div class="cn-table-wrap">
-      <table class="cn-table">
-        <colgroup><col class="is-name"><col><col class="is-actions"></colgroup>
-        <thead><tr><th>Name</th><th>Destination</th><th></th></tr></thead>
-        <tbody id="rows"></tbody>
-      </table>
-    </div>
-    <p class="cn-status" id="l-msg" role="status"></p>
-  </section>
-</main>
-
-<dialog id="edit" class="cn-dialog">
-  <form id="e-form" method="dialog" class="cn-form">
-    <h2 class="cn-section-title" id="e-title"></h2>
-    <label class="cn-field">
-      <span class="cn-label">Destination URL</span>
-      <input id="e-url" class="cn-input is-mono" type="text" required maxlength="2048" spellcheck="false">
-    </label>
-    <label class="cn-field">
-      <span class="cn-label">Description</span>
-      <input id="e-desc" class="cn-input" type="text" maxlength="500">
-    </label>
-    <p class="cn-status is-error" id="e-msg" role="alert"></p>
-    <div class="cn-dialog-foot">
-      <button type="button" class="cn-btn is-quiet" id="e-cancel">Cancel</button>
-      <button type="submit" class="cn-btn is-primary">Save</button>
-    </div>
-  </form>
-</dialog>
-<script type="module" src="links.js"></script>
-</body>
+<body></body>
 </html>

@@ -10,7 +10,9 @@
 
 export const LOCAL = "local";
 export const SHARED = "shared";
+/** @type {LocalBackend} */
 export const LOCAL_BACKEND = Object.freeze({ kind: "local", label: "This browser" });
+/** @returns {ServerBackend} */
 const server = (url) => ({ kind: "server", url, label: new URL(url).host });
 
 /** Returns a clean origin ("https://go.example.com") or throws with a user-facing message. */
@@ -41,8 +43,12 @@ async function managedServerUrl() {
   }
 }
 
+/** @typedef {{ kind: "local", label: string }} LocalBackend */
+/** @typedef {{ kind: "server", url: string, label: string }} ServerBackend */
+/** @typedef {LocalBackend | ServerBackend} Backend */
+
 /**
- * @returns {{ mode: string, server: object|null, active: object, choices: object[], managed: boolean }}
+ * @returns {Promise<{ mode: string, server: ServerBackend|null, active: Backend, choices: Backend[], managed: boolean }>}
  * `choices` is what the popup can switch between: this browser, plus the server once one is set.
  */
 export async function getState() {

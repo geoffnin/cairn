@@ -1,6 +1,8 @@
 export interface Env {
   DB: D1Database;
   CACHE: KVNamespace;
+  /** The web UI's static files (server/public, built from ../web). */
+  ASSETS: Fetcher;
 
   AUTH_MODE?: string;
 

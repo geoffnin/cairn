@@ -1,0 +1,28 @@
+/* Primitives shared by many components: field labels and hints, the text-control box (inputs,
+   selects, search), and kbd keys. */
+@layer components {
+  .cn-label { font: var(--type-label); color: var(--ink-muted); }
+  .cn-hint { font: var(--type-small); color: var(--ink-muted); }
+  .cn-hint code { color: var(--ink); }
+  .cn-hint.is-error { color: var(--clay); }
+
+  .cn-control {
+    width: 100%; height: var(--control); padding: 0 var(--space-3);
+    color: var(--ink); background: var(--surface);
+    border: 1px solid var(--line-control); border-radius: var(--radius-md);
+    transition: border-color 120ms var(--ease-quick);
+  }
+  .cn-control::placeholder { color: var(--ink-faint); }
+  .cn-control:hover:not(:disabled) { border-color: var(--ink-muted); }
+  .cn-control:disabled { opacity: .5; }
+  .cn-control[aria-invalid="true"] { border-color: var(--clay); }
+  .cn-control.is-mono { font-family: var(--font-mono); font-size: 13px; }
+  select.cn-control { padding-right: var(--space-2); }
+
+  .cn-kbd {
+    display: inline-block; min-width: 18px; padding: 1px 5px; text-align: center;
+    font: var(--type-kbd); color: var(--ink-muted);
+    background: var(--surface-sunken);
+    border: 1px solid var(--line); border-bottom-width: 2px; border-radius: var(--radius-sm);
+  }
+}

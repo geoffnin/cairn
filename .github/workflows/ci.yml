@@ -3,29 +3,35 @@ on:
   push:
   pull_request:
 jobs:
-  server:
+  frontend:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: server
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: server/package-lock.json
+          cache-dependency-path: package-lock.json
       - run: npm ci
-      - run: npm run typecheck
+      - run: npm run check
       - run: npm test
-  extension:
+      - run: npm run build
+  server:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: extension
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+      # The server's tests run against the built web UI, which needs the root's tools.
+      - run: npm ci
+      - run: npm ci
+        working-directory: server
+      - run: npm run typecheck
+        working-directory: server
       - run: npm test
+        working-directory: server

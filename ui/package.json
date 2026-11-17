@@ -1,0 +1,11 @@
+{
+  "name": "@cairn/ui",
+  "private": true,
+  "type": "module",
+  "description": "Cairn's design system in Svelte: tokens, global styles and the components both UIs share.",
+  "exports": {
+    "./components/*": "./src/components/*",
+    "./lib/*": "./src/lib/*.ts",
+    "./styles/*": "./src/styles/*"
+  }
+}

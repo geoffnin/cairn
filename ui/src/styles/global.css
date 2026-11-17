@@ -1,0 +1,11 @@
+/* The global layer of Cairn's styles: tokens, fonts, element defaults and the few primitives
+   that many components share. Everything else is styled inside its own .svelte file, scoped to
+   that component. Each app imports this file once from its entry point.
+
+   Layers run lowest to highest priority; component styles are unlayered, so they always win. */
+@layer tokens, base, components;
+
+@import "./tokens.css";
+@import "./fonts.css";
+@import "./base.css";
+@import "./controls.css";

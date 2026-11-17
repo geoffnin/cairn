@@ -1,9 +1,14 @@
 {
-  "name": "cairn-extension",
+  "name": "@cairn/extension",
   "private": true,
   "type": "module",
+  "description": "The Chrome extension. Builds to dist/, which is what Chrome loads.",
   "scripts": {
-    "test": "node --test test/*.test.js",
-    "tokens": "node ../design/build-tokens.mjs"
+    "build": "vite build",
+    "dev": "vite build --watch --mode development",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@cairn/ui": "*"
   }
 }

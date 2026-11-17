@@ -188,8 +188,9 @@ over OpenTelemetry, create a traces destination in the dashboard and add its nam
 
 ## Install the extension
 
-**Try it:** open `chrome://extensions`, turn on Developer mode, choose **Load unpacked** and pick
-the `extension/` folder. The settings page opens with **local mode** selected, so `go/` links
+**Try it:** build it first (`npm ci && npm run build` at the repository root), then open
+`chrome://extensions`, turn on Developer mode, choose **Load unpacked** and pick the
+`extension/dist/` folder. The settings page opens with **local mode** selected, so `go/` links
 work straight away, stored in this browser.
 
 **Local mode** keeps links in this Chrome profile only (`chrome.storage.local`): no server, no
@@ -209,7 +210,7 @@ export yet, so links made in local mode stay in local mode.
 There is one server at a time. Switch between this browser and shared in settings or in the
 toolbar popup; the other side's links are kept, just not used.
 
-**Roll it out:** zip the `extension/` folder and publish it (unlisted or private) on the Chrome
+**Roll it out:** build it, zip the `extension/dist/` folder and publish it (unlisted or private) on the Chrome
 Web Store, then force-install it by policy. Set the server URL for everyone with a managed
 storage policy (the extension's `serverUrl` setting); people then only need to sign in, and
 local mode is not offered. Where that setting goes depends on how you manage Chrome:
@@ -247,38 +248,54 @@ once, or use the `go` + space form; Chrome then remembers it as an address.
 
 ## Develop
 
+The repository is an npm workspace: `ui/` (the design system's Svelte components), `web/` (the
+server's web UI) and `extension/`. `server/` is its own package, the Cloudflare Worker.
+
 ```sh
+npm ci                           # at the root: Svelte, Vite and the test tools
+npm run build                    # web UI into server/public/_/, extension into extension/dist/
+npm run check                    # tokens up to date, svelte-check (types and accessibility)
+npm test                         # component tests (Vitest), then the extension's link rules
+
 cd server
+npm ci
 cp .dev.vars.example .dev.vars   # AUTH_MODE=dev: signed in as dev@example.com on localhost
 npm run migrate:local
-npm run dev                      # http://localhost:8787
-npm test                         # runs in the Workers runtime with local D1 and KV
+npm run dev                      # builds the web UI, then http://localhost:8787
+npm test                         # builds the web UI, then runs in the Workers runtime
 npm run typecheck
-
-cd ../extension && npm test      # the extension's link rules, shared with the server's
 ```
 
 Cloudflare Access does not run locally, so `dev` mode signs you in as a fixed user, and only on
 localhost. Point the extension at `http://localhost:8787` to test the two together.
 
-### Styles
+For live reload on the web UI, run `npm run dev -w web` at the root alongside the server's
+`npm run dev`: Vite serves the page on http://localhost:5173/_/ and passes API calls to the
+Worker. For the extension, `npm run dev -w extension` rebuilds `extension/dist/` on every save;
+reload the extension in `chrome://extensions` to pick it up.
 
-Both UIs, the extension's pages and the server's web UI, use one stylesheet built from the Cairn
-design system. It lives in `extension/ui/` (the extension has to ship it inside its own folder),
-and the Worker bundles the same files and serves them under `/_/ui/`. There is no CSS build step.
+### Frontend
+
+Both UIs are Svelte apps built by Vite into static files: the server's into `server/public/_/`,
+which the Worker serves after signing the request in, and the extension's into
+`extension/dist/`. The manage page (New link card, search, links table, edit dialog) is one
+component, `ui/src/components/LinksPage.svelte`, used by both; each app hands it a `LinkSource`
+that says where links live (`web/src/api.ts` for the server, `extension/src/localLinks.ts` for
+this browser).
 
 ```
-design/tokens.json         design tokens exported from the design system: colours, type, spacing
-design/build-tokens.mjs    turns them into extension/ui/tokens.css
-extension/ui/cairn.css     the entry point every page links; @imports the rest in cascade layers
-extension/ui/base.css      density, focus ring, element defaults, motion
-extension/ui/components/   one file per component, all classes prefixed cn-
-extension/ui/fonts/        Instrument Sans and IBM Plex Mono (OFL), bundled, never from a CDN
+design/tokens.json          design tokens exported from the Cairn design system
+design/build-tokens.mjs     turns them into ui/src/styles/tokens.css
+ui/src/styles/global.css    tokens, fonts, element defaults and shared primitives, in cascade layers
+ui/src/styles/fonts/        Instrument Sans and IBM Plex Mono (OFL), bundled, never from a CDN
+ui/src/components/          one .svelte file per component, its styles scoped inside it
+ui/src/lib/links.ts         the Link and LinkSource types, and helpers both apps use
+web/                        the server UI: entry point, App.svelte, the API LinkSource
+extension/src/              the popup, settings and manage pages; extension/public/ is copied as is
 ```
 
-To change a colour, size or font, update `design/tokens.json` and run
-`node design/build-tokens.mjs`; CI fails if `tokens.css` is out of date. A new component file
-needs an `@import` in `cairn.css` and a line in `server/src/assets.ts`; tests check both.
+To change a colour, size or font, update `design/tokens.json` and run `npm run tokens`;
+`npm run check` fails if `tokens.css` is out of date.
 
 ### API
 

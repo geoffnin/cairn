@@ -1,10 +1,9 @@
 import { handleApi } from "./api";
-import { serveUiFile } from "./assets";
 import { AuthError, authenticate, handleLogout } from "./auth";
 import { clickEvent, logEvent } from "./events";
 import { lookupTarget, resolveTarget } from "./links";
 import type { Env } from "./types";
-import { renderUi } from "./ui";
+import { serveUi } from "./ui";
 import { json, redirect } from "./util";
 
 // Everything that is not a go link lives under /_/ ("_" can never start a link name).
@@ -20,9 +19,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
   const user = await authenticate(req, env, ctx);
   if (path.startsWith("/_/api/")) return handleApi(req, env, user, path.slice("/_/api".length));
   if (path === "/" || path === "/_") return redirect("/_/");
-  if (path === "/_/") return renderUi();
-  if (path.startsWith("/_/ui/")) return serveUiFile(req, path);
-  if (path.startsWith("/_/")) return new Response("Not found", { status: 404 });
+  if (path.startsWith("/_/")) return serveUi(req, env);
 
   // go/<slug>[/<rest>]
   if (req.method !== "GET" && req.method !== "HEAD") return new Response("Method not allowed", { status: 405 });
