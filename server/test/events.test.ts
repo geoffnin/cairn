@@ -186,9 +186,53 @@ describe("users table", () => {
     const link = await (await call("/_/api/links/mine")).json<Record<string, unknown>>();
     expect(link.owner).toBe("alice@example.com");
     expect(link.owner_id).toMatch(/^[0-9a-f]{32}$/);
-    const row = await env.DB.prepare("SELECT * FROM links WHERE slug = 'mine'").first<Record<string, unknown>>();
-    expect(row).not.toHaveProperty("owner");
-    expect(JSON.stringify(row)).not.toMatch(/@/);
+    // The email shown comes from users, not the transitional links.owner column.
+    await env.DB.exec("UPDATE links SET owner = 'stale@example.com' WHERE slug = 'mine'");
+    expect((await (await call("/_/api/links/mine")).json<{ owner: string }>()).owner).toBe("alice@example.com");
+  });
+
+  it("keeps the previous Worker version working during an upgrade", async () => {
+    // Statements the previous version runs, against the migrated schema.
+    await env.DB.prepare(
+      "INSERT INTO links (slug, url, description, owner, created_at, updated_at, rev) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    ).bind("old", "https://old.test/", "", "erin@example.com", 1, 1, "r0").run();
+    await env.DB.prepare("UPDATE links SET url = ?, description = ?, owner = ?, updated_at = ?, rev = ? WHERE slug = ? AND rev = ?")
+      .bind("https://old2.test/", "", "erin@example.com", 2, "r1", "old", "r0").run();
+    const { results } = await env.DB.prepare("SELECT * FROM links WHERE owner = ?").bind("erin@example.com").all();
+    expect(results).toHaveLength(1);
+
+    // The new version shows and edits that row, and gives it an owner ID on the first change.
+    expect((await (await call("/_/api/links/old")).json<{ owner: string }>()).owner).toBe("erin@example.com");
+    const res = await call("/_/api/links/old", { method: "PUT", body: { description: "now with an id" }, as: "erin@example.com" });
+    expect(res.status).toBe(200);
+    const erin = (await env.DB.prepare("SELECT id FROM users WHERE email = 'erin@example.com'").first<{ id: string }>())!.id;
+    expect((await res.json<{ owner_id: string }>()).owner_id).toBe(erin);
+    const update = logged.map((a) => a[0] as Record<string, unknown>).find((e) => e?.["event.name"] === "cairn.link.update");
+    expect(update).toMatchObject({ "link.owner_id": erin, "user.id": erin, "user.admin_override": false });
+    expect(update).not.toHaveProperty("link.previous_owner_id");
+  });
+
+  it("changes nothing if looking up who is acting fails", async () => {
+    await create("safe", "https://one.test/");
+    // A database whose users queries fail, standing in for any failure of the lookup.
+    const failingUsers = new Proxy(env.DB, {
+      get(target, prop) {
+        if (prop === "prepare") {
+          return (sql: string) => {
+            if (sql.includes("users (")) throw new Error("users unavailable");
+            return target.prepare(sql);
+          };
+        }
+        const v = Reflect.get(target, prop);
+        return typeof v === "function" ? v.bind(target) : v;
+      },
+    });
+    const broken = { env: { DB: failingUsers } };
+    expect((await call("/_/api/links/safe", { method: "PUT", body: { url: "https://two.test/" }, ...broken })).status).toBe(500);
+    expect((await call("/_/api/links/safe", { method: "DELETE", ...broken })).status).toBe(500);
+    const row = await env.DB.prepare("SELECT url FROM links WHERE slug = 'safe'").first<{ url: string }>();
+    expect(row?.url).toBe("https://one.test/");
+    expect(logged.map((a) => (a[0] as Record<string, unknown>)?.["event.name"])).not.toContain("cairn.link.update");
   });
 
   it("gives each email one ID, case-insensitively, and keeps it", async () => {

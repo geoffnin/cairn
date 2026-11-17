@@ -141,8 +141,8 @@ say which fields changed and what the previous host or owner was:
 Saves that change nothing, and changes that are refused, are not logged.
 
 **No email addresses are logged.** People appear as random IDs (`user.id`, `link.owner_id`).
-The only place an ID is linked to an email is Cairn's own `users` table in D1, which the web UI
-uses to show owners. To find out who an ID is, query that table:
+IDs are linked to emails only inside Cairn's own D1 database (the `users` table), which the
+web UI uses to show owners. To find out who an ID is, query that table:
 
 ```sh
 npx wrangler d1 execute DB --remote --command "SELECT email FROM users WHERE id = '<id>'"

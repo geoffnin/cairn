@@ -147,8 +147,12 @@ export async function lookupTarget(env: Env, slug: string): Promise<string | nul
 
 // ---- CRUD ----
 
-// Links with the owner's email joined in from users (the only place emails are stored).
-const SELECT_LINKS = "SELECT l.*, COALESCE(u.email, '') AS owner FROM links l LEFT JOIN users u ON u.id = l.owner_id";
+// Links with the owner's email from users. links.owner is still written (see migration 0006) so
+// the previous Worker version keeps working during an upgrade; it is the fallback for rows that
+// version wrote without an owner_id.
+const SELECT_LINKS =
+  "SELECT l.slug, l.url, l.description, l.owner_id, l.created_at, l.updated_at, l.rev, " +
+  "COALESCE(u.email, NULLIF(l.owner, ''), '') AS owner FROM links l LEFT JOIN users u ON u.id = l.owner_id";
 
 export function getLink(env: Env, slug: string): Promise<Link | null> {
   return env.DB.prepare(`${SELECT_LINKS} WHERE l.slug = ?`).bind(slug).first<Link>();
@@ -178,13 +182,13 @@ export async function listLinks(env: Env, opts: { q?: string; ownerId?: string; 
 /** Returns null if the slug is already taken. */
 export async function createLink(
   env: Env,
-  link: Pick<Link, "slug" | "url" | "description" | "owner_id">,
+  link: Pick<Link, "slug" | "url" | "description" | "owner_id" | "owner">,
 ): Promise<Link | null> {
   const now = nowSeconds();
   const res = await env.DB.prepare(
-    "INSERT INTO links (slug, url, description, owner_id, created_at, updated_at, rev) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (slug) DO NOTHING",
+    "INSERT INTO links (slug, url, description, owner_id, owner, created_at, updated_at, rev) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (slug) DO NOTHING",
   )
-    .bind(link.slug, link.url, link.description, link.owner_id, now, now, newRev())
+    .bind(link.slug, link.url, link.description, link.owner_id, link.owner, now, now, newRev())
     .run();
   if (!res.meta.changes) return null;
   memSet(env, link.slug, link.url);
@@ -197,13 +201,13 @@ export async function updateLink(
   env: Env,
   slug: string,
   rev: string,
-  patch: Pick<Link, "url" | "description" | "owner_id">,
+  patch: Pick<Link, "url" | "description" | "owner_id" | "owner">,
 ): Promise<Link | null> {
   await kvClear(env, slug);
   const res = await env.DB.prepare(
-    "UPDATE links SET url = ?, description = ?, owner_id = ?, updated_at = ?, rev = ? WHERE slug = ? AND rev = ?",
+    "UPDATE links SET url = ?, description = ?, owner_id = ?, owner = ?, updated_at = ?, rev = ? WHERE slug = ? AND rev = ?",
   )
-    .bind(patch.url, patch.description, patch.owner_id, nowSeconds(), newRev(), slug, rev)
+    .bind(patch.url, patch.description, patch.owner_id, patch.owner, nowSeconds(), newRev(), slug, rev)
     .run();
   if (!res.meta.changes) {
     mem.delete(slug);

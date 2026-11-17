@@ -916,9 +916,9 @@ button install should confirm: resources created, migrations applied, `ctx.acces
 
 **Decision.** A new `users` table maps a random ID (128 bits, hex) to an email. Events carry
 `user.id`, `link.owner_id` and `link.previous_owner_id` instead of emails, and links store the
-owner's ID (`links.owner_id`) instead of the email. The API and UI still show owners' emails,
-joined in from `users`. Migration `0006` creates the table from the existing owners and
-converts the links. Click events are unchanged: they never identified anyone.
+owner's ID (`links.owner_id`). The API and UI still show owners' emails, read from `users`.
+Migration `0006` creates the table from the existing owners and fills `owner_id`. Click events
+are unchanged: they never identified anyone.
 
 **Why random IDs.**
 
@@ -934,8 +934,24 @@ converts the links. Click events are unchanged: they never identified anyone.
   them pointing at an ID that no longer resolves.
 
 **Why links store the ID too.** The request was IDs in events plus a lookup table for the UI.
-Storing IDs in `links` as well means an email exists in exactly one row, so changing or
-removing it is one update, and the database itself holds no email outside `users`.
+Storing IDs in `links` as well means, once the old column is gone, an email exists in exactly
+one row, so changing or removing it is one update.
+
+**Rolled out in two steps (expand, then contract).** The deploy script migrates before it
+deploys (D26), so for a moment the previous Worker version runs against the new schema, and if
+the deploy fails it keeps running. Dropping `links.owner` in the same release would break that
+version's writes, and rolling the Worker back would not bring the column back. So:
+
+- *This release (expand):* migration `0006` only adds. The new code writes both `owner_id` and
+  the old `owner` column, reads the email from `users` (falling back to `owner` for a row the
+  previous version wrote mid-upgrade), and gives such a row an ID on its first change.
+- *A later release (contract):* first stop writing `links.owner`; then, once that version is
+  everywhere, a migration fills any missing `owner_id` and drops the column. Until then the D1
+  database still holds owners' emails in two places; the logs, which are the point of this
+  change, hold none.
+
+Who is acting is looked up before a link is changed, so a failure there can no longer follow a
+committed change and lose its event.
 
 **Details.**
 

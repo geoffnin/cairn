@@ -78,7 +78,7 @@ export async function handleApi(req: Request, env: Env, user: User, path: string
         const url = validateUrl(b.url);
         const description = validateDescription(b.description);
         const actorId = await userIdFor(env, user.email);
-        const link = await createLink(env, { slug, url, description, owner_id: actorId });
+        const link = await createLink(env, { slug, url, description, owner_id: actorId, owner: user.email });
         if (!link) return json({ error: `go/${slug} already exists.` }, 409);
         logEvent(linkCreated(req, actorId, slug, link));
         return json(present(env, user, link), 201);
@@ -98,23 +98,31 @@ export async function handleApi(req: Request, env: Env, user: User, path: string
       // checked above, so nothing that changed in between can be overwritten.
       const stale = () => json({ error: `go/${slug} was changed by someone else. Reload and try again.` }, 409);
 
+      // Resolved before changing anything, so a failure here cannot follow a committed change
+      // and lose its event. A row written by the previous Worker version during an upgrade has
+      // no owner ID yet; it gets one from its owner's email.
+      const actorId = await userIdFor(env, user.email);
+      const currentOwnerId = link.owner_id || (link.owner ? await userIdFor(env, link.owner) : "");
+      const linkBefore = { ...link, owner_id: currentOwnerId };
+
       if (req.method === "PUT") {
         const b = await body(req);
         if (b.rev !== undefined && b.rev !== link.rev) return stale();
         const url = b.url === undefined ? link.url : validateUrl(b.url);
         const description = b.description === undefined ? link.description : validateDescription(b.description);
         // Handing a link to someone who has never signed in gives them an ID now.
-        const ownerId = b.owner === undefined ? link.owner_id : await userIdFor(env, validateOwner(b.owner));
-        const updated = await updateLink(env, slug, link.rev, { url, description, owner_id: ownerId });
+        const owner = b.owner === undefined ? link.owner : validateOwner(b.owner);
+        const ownerId = b.owner === undefined ? currentOwnerId : await userIdFor(env, owner);
+        const updated = await updateLink(env, slug, link.rev, { url, description, owner_id: ownerId, owner });
         if (!updated) return stale();
-        logEvent(linkUpdated(req, await userIdFor(env, user.email), slug, link, updated));
+        logEvent(linkUpdated(req, actorId, slug, linkBefore, updated));
         return json(present(env, user, updated));
       }
       if (req.method === "DELETE") {
         const expected = new URL(req.url).searchParams.get("rev");
         if (expected !== null && expected !== link.rev) return stale();
         if (!(await deleteLink(env, slug, link.rev))) return stale();
-        logEvent(linkDeleted(req, await userIdFor(env, user.email), slug, link));
+        logEvent(linkDeleted(req, actorId, slug, linkBefore));
         return json({ ok: true });
       }
     }
