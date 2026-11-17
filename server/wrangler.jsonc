@@ -4,6 +4,12 @@
   "name": "cairn",
   "main": "src/index.ts",
   "compatibility_date": "2026-11-01",
+  // The web UI's stylesheet, fonts and images come from ../extension/ui, bundled into the Worker
+  // (src/assets.ts).
+  "rules": [
+    { "type": "Text", "globs": ["**/*.css", "**/*.svg"] },
+    { "type": "Data", "globs": ["**/*.woff2"] }
+  ],
 
   // The workers.dev URL gives a fresh install a working address before any custom domain exists.
   // Turning on Cloudflare Access for the Worker protects it, and Cairn refuses every request that

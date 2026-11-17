@@ -1,0 +1,15 @@
+/* Two to four peers that apply at once (density, theme).
+   <div class="cn-seg" role="group" aria-label="Density"><button aria-pressed="true">…</button></div> */
+@layer components {
+  .cn-seg {
+    display: inline-flex; gap: 2px; padding: 2px;
+    background: var(--surface-sunken); border: 1px solid var(--line); border-radius: var(--radius-md);
+  }
+  .cn-seg button {
+    padding: 4px var(--space-3); border: 0; border-radius: var(--radius-sm);
+    font: var(--type-label); color: var(--ink-muted); background: transparent; cursor: pointer;
+    transition: background-color 120ms var(--ease-quick), color 120ms var(--ease-quick);
+  }
+  .cn-seg button:hover { color: var(--ink); }
+  .cn-seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-card), 0 0 0 1px var(--line); }
+}

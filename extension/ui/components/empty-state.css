@@ -1,0 +1,8 @@
+/* The mark at 40px, one plain sentence, an optional hint. */
+@layer components {
+  .cn-empty {
+    display: grid; justify-items: center; gap: var(--space-3);
+    padding: var(--space-8) var(--space-5); text-align: center; color: var(--ink-muted);
+  }
+  .cn-empty .cn-mark { width: 40px; }
+}

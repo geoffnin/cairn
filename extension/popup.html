@@ -1,30 +1,38 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-density="compact">
 <head>
 <meta charset="utf-8">
-<link rel="stylesheet" href="ui.css">
-<style>body { width: 340px; padding: 14px; } #where { margin: 0 0 4px; }</style>
+<link rel="stylesheet" href="ui/cairn.css">
+<script src="ui/display.js"></script>
 </head>
-<body>
-  <h1>New go link</h1>
-  <form id="form">
-    <div id="backend-row" hidden>
-      <label for="backend">Use links from</label>
-      <select id="backend"></select>
-    </div>
-    <p class="hint" id="where"></p>
-    <label for="slug">Name</label>
-    <div class="slug"><span>go/</span><input id="slug" type="text" required maxlength="64" autocomplete="off" spellcheck="false" autofocus></div>
-    <label for="url">Destination URL</label>
-    <input id="url" type="text" required maxlength="2048" spellcheck="false">
-    <label for="desc">Description (optional)</label>
-    <input id="desc" type="text" maxlength="500">
-    <div class="row">
-      <button id="submit" type="submit">Create link</button>
+<body class="cn-popup">
+  <div class="cn-popup-head">
+    <h1 class="cn-section-title">New go link</h1>
+    <span class="cn-hint" id="where"></span>
+  </div>
+  <form id="form" class="cn-form">
+    <label class="cn-field" id="backend-row" hidden>
+      <span class="cn-label">Use links from</span>
+      <select id="backend" class="cn-input"></select>
+    </label>
+    <label class="cn-field">
+      <span class="cn-label">Name</span>
+      <span class="cn-gofield"><input id="slug" class="cn-input" type="text" required maxlength="64" autocomplete="off" spellcheck="false" autofocus></span>
+    </label>
+    <label class="cn-field">
+      <span class="cn-label">Destination URL</span>
+      <input id="url" class="cn-input is-mono" type="text" required maxlength="2048" spellcheck="false">
+    </label>
+    <label class="cn-field">
+      <span class="cn-label">Description (optional)</span>
+      <input id="desc" class="cn-input" type="text" maxlength="500">
+    </label>
+    <p class="cn-status" id="msg" role="status"></p>
+    <div class="cn-popup-foot">
+      <button id="submit" class="cn-btn is-primary" type="submit">Create link</button>
       <a id="browse" href="#">All links</a>
     </div>
   </form>
-  <p class="msg" id="msg" role="status"></p>
   <script type="module" src="popup.js"></script>
 </body>
 </html>

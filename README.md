@@ -261,6 +261,25 @@ cd ../extension && npm test      # the extension's link rules, shared with the s
 Cloudflare Access does not run locally, so `dev` mode signs you in as a fixed user, and only on
 localhost. Point the extension at `http://localhost:8787` to test the two together.
 
+### Styles
+
+Both UIs, the extension's pages and the server's web UI, use one stylesheet built from the Cairn
+design system. It lives in `extension/ui/` (the extension has to ship it inside its own folder),
+and the Worker bundles the same files and serves them under `/_/ui/`. There is no CSS build step.
+
+```
+design/tokens.json         design tokens exported from the design system: colours, type, spacing
+design/build-tokens.mjs    turns them into extension/ui/tokens.css
+extension/ui/cairn.css     the entry point every page links; @imports the rest in cascade layers
+extension/ui/base.css      density, focus ring, element defaults, motion
+extension/ui/components/   one file per component, all classes prefixed cn-
+extension/ui/fonts/        Instrument Sans and IBM Plex Mono (OFL), bundled, never from a CDN
+```
+
+To change a colour, size or font, update `design/tokens.json` and run
+`node design/build-tokens.mjs`; CI fails if `tokens.css` is out of date. A new component file
+needs an `@import` in `cairn.css` and a line in `server/src/assets.ts`; tests check both.
+
 ### API
 
 All routes need a Cloudflare Access session. Writes need the header `X-Cairn-Request: 1`.

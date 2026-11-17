@@ -1,12 +1,10 @@
 import { LOCAL, SHARED, getState, hasServerAccess, normalizeServerUrl, probe, setMode, setServer } from "./config.js";
 import { countLinks } from "./local.js";
+import { say as sayIn } from "./ui/status.js";
 
 const $ = (id) => document.getElementById(id);
-const say = (text, isErr = false) => {
-  $("msg").textContent = text;
-  $("msg").classList.toggle("err", isErr);
-};
-const button = (text, onclick) => Object.assign(document.createElement("button"), { type: "button", className: "quiet", textContent: text, onclick });
+const say = (text, isErr = false) => sayIn($("msg"), text, isErr);
+const button = (text, onclick) => Object.assign(document.createElement("button"), { type: "button", className: "cn-btn", textContent: text, onclick });
 
 // Must run straight from a click: Chrome only shows the permission prompt for a user gesture.
 function requestAccess(url) {
@@ -47,8 +45,6 @@ async function render() {
   $("mode-local").checked = state.mode === LOCAL;
   $("mode-shared").checked = state.mode === SHARED;
   $("mode-shared").disabled = state.managed;
-  $("local-choice").classList.toggle("on", state.mode === LOCAL);
-  $("shared-choice").classList.toggle("on", state.mode === SHARED);
 
   if (document.activeElement !== $("server")) $("server").value = state.server?.url ?? "";
   $("server").disabled = $("save").disabled = state.managed;
@@ -56,7 +52,7 @@ async function render() {
   if (state.managed) $("lead").textContent = "Your organization set up shared links for this browser.";
 
   $("shared-meta").textContent = status?.text ?? "";
-  $("shared-meta").classList.toggle("warn", !!status?.warn);
+  $("shared-meta").classList.toggle("is-error", !!status?.warn);
   const acts = [];
   if (status?.action === "grant") {
     acts.push(button("Grant access", async () => {
@@ -102,6 +98,40 @@ $("server-form").onsubmit = async (e) => {
     render();
   }
 };
+
+// Display: theme and density take effect at once, on every extension page (ui/display.js).
+const DISPLAY_KEY = "cairn.display";
+function readDisplay() {
+  try {
+    return { theme: "system", density: "default", ...JSON.parse(localStorage.getItem(DISPLAY_KEY)) };
+  } catch {
+    return { theme: "system", density: "default" };
+  }
+}
+function showDisplay(prefs) {
+  const html = document.documentElement;
+  if (prefs.theme === "system") delete html.dataset.theme;
+  else html.dataset.theme = prefs.theme;
+  if (prefs.density === "default") delete html.dataset.density;
+  else html.dataset.density = prefs.density;
+  for (const key of ["theme", "density"]) {
+    for (const b of $(key).querySelectorAll("button")) b.setAttribute("aria-pressed", String(b.value === prefs[key]));
+  }
+}
+for (const key of ["theme", "density"]) {
+  $(key).onclick = (e) => {
+    const value = e.target.closest("button")?.value;
+    if (!value) return;
+    const prefs = { ...readDisplay(), [key]: value };
+    try {
+      localStorage.setItem(DISPLAY_KEY, JSON.stringify(prefs));
+    } catch {}
+    showDisplay(prefs);
+  };
+}
+// Another settings tab changed them.
+window.addEventListener("storage", (e) => e.key === DISPLAY_KEY && showDisplay(readDisplay()));
+showDisplay(readDisplay());
 
 chrome.storage.onChanged.addListener(render);
 // Coming back from the sign-in tab: show the new state.

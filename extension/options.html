@@ -2,56 +2,62 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cairn settings</title>
-<link rel="stylesheet" href="ui.css">
-<style>
-  body { padding: 32px 16px; }
-  main { max-width: 620px; margin: 0 auto; }
-  h2 { margin-top: 24px; }
-  .choice { display: flex; gap: 12px; align-items: flex-start; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); margin-bottom: 10px; }
-  .choice.on { border-color: var(--accent); }
-  .choice input[type=radio] { margin-top: 3px; }
-  .choice .body { flex: 1; min-width: 0; }
-  .choice .title { display: block; margin: 0; font-size: 14px; color: var(--text); font-weight: 600; cursor: pointer; }
-  .meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
-  .meta.warn { color: var(--danger); }
-  .server { display: flex; gap: 8px; margin-top: 10px; }
-  .server input { flex: 1; min-width: 0; }
-  .acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-  .acts:empty { display: none; }
-</style>
+<link rel="stylesheet" href="ui/cairn.css">
+<script src="ui/display.js"></script>
 </head>
 <body>
-<main>
-  <h1>Cairn</h1>
-  <p class="hint" id="lead">Choose where your go/ links live.</p>
+<main class="cn-page is-narrow">
+  <header class="cn-header">
+    <span class="cn-brand"><svg class="cn-mark" viewBox="0 0 560 540" aria-hidden="true"><polygon class="f-peach" points="363,5 180,88 75,268 298,145"/><polygon class="f-umber" points="363,5 505,235 298,145"/><polygon class="f-sage-light" points="298,145 505,235 205,407"/><polygon class="f-sage" points="75,268 298,145 205,407 48,475 8,437"/><polygon class="f-terracotta" points="505,235 552,403 448,526 405,292"/><polygon class="f-pine" points="205,407 405,292 448,526"/><polygon class="f-forest" points="48,475 205,407 448,526 95,530"/></svg>cairn</span>
+    <span class="cn-tagline">Settings</span>
+  </header>
 
-  <h2>Use links from</h2>
-  <div class="choice" id="local-choice">
-    <input type="radio" name="mode" value="local" id="mode-local">
-    <div class="body">
-      <label class="title" for="mode-local">This browser</label>
-      <div class="meta" id="local-meta"></div>
-      <div class="acts"><button type="button" class="quiet" id="manage">Manage links</button></div>
+  <p class="cn-hint" id="lead">Choose where your go/ links live.</p>
+
+  <section class="cn-form" role="radiogroup" aria-labelledby="mode-title">
+    <h2 class="cn-section-title" id="mode-title">Use links from</h2>
+    <div class="cn-mode" id="local-choice">
+      <input type="radio" name="mode" value="local" id="mode-local">
+      <label class="cn-mode-title" for="mode-local">This browser</label>
+      <span class="cn-mode-body" id="local-meta"></span>
+      <div class="cn-mode-extra"><button type="button" class="cn-btn" id="manage">Manage links</button></div>
     </div>
-  </div>
 
-  <div class="choice" id="shared-choice">
-    <input type="radio" name="mode" value="shared" id="mode-shared">
-    <div class="body">
-      <label class="title" for="mode-shared">Shared, from your company's Cairn server</label>
-      <div class="meta">Everyone at your company sees the same links. You sign in with your company account through Cloudflare Access.</div>
-      <form class="server" id="server-form">
-        <input id="server" type="text" placeholder="https://go.example.com" spellcheck="false" autocomplete="off" aria-label="Cairn server URL">
-        <button id="save" type="submit">Use this server</button>
+    <div class="cn-mode" id="shared-choice">
+      <input type="radio" name="mode" value="shared" id="mode-shared">
+      <label class="cn-mode-title" for="mode-shared">Shared, from your company's Cairn server</label>
+      <span class="cn-mode-body">Everyone at your company sees the same links. You sign in with your company account through Cloudflare Access.</span>
+      <form class="cn-mode-extra" id="server-form">
+        <label class="cn-field">
+          <span class="cn-label">Server URL</span>
+          <input id="server" class="cn-input is-mono" type="text" placeholder="https://go.example.com" spellcheck="false" autocomplete="off">
+        </label>
+        <button id="save" class="cn-btn is-primary" type="submit">Use this server</button>
       </form>
-      <div class="meta" id="shared-meta"></div>
-      <div class="acts" id="shared-acts"></div>
+      <span class="cn-mode-body" id="shared-meta"></span>
+      <div class="cn-mode-extra" id="shared-acts"></div>
     </div>
-  </div>
+    <p class="cn-status" id="msg" role="status"></p>
+  </section>
 
-  <p class="msg" id="msg" role="status"></p>
-  <p class="hint">Type <b>go/name</b> in the address bar to open a link, or <b>go</b> then space to search.</p>
+  <section class="cn-form">
+    <h2 class="cn-section-title">Display</h2>
+    <div class="cn-cluster">
+      <span class="cn-label" id="density-label">Density</span>
+      <div class="cn-seg" role="group" aria-labelledby="density-label" id="density">
+        <button type="button" value="compact">Compact</button><button type="button" value="default">Default</button><button type="button" value="comfortable">Comfortable</button>
+      </div>
+      <span class="cn-label" id="theme-label">Theme</span>
+      <div class="cn-seg" role="group" aria-labelledby="theme-label" id="theme">
+        <button type="button" value="system">System</button><button type="button" value="light">Light</button><button type="button" value="dark">Dark</button>
+      </div>
+    </div>
+    <p class="cn-hint">Comfortable shows each link's description under its name.</p>
+  </section>
+
+  <p class="cn-hint">Type <span class="cn-go">name</span> in the address bar to open a link, or <b>go</b> then space to search.</p>
 </main>
 <script type="module" src="options.js"></script>
 </body>

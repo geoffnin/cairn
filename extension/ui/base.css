@@ -1,0 +1,37 @@
+@layer base {
+  /* Density: compact | default | comfortable, set as data-density on <html>.
+     Changes heights and padding only, never type size or colour. */
+  :root {
+    --row: var(--row-default);
+    --control: var(--control-default);
+    --pad: var(--space-5);
+    --ease-settle: cubic-bezier(.2, .8, .2, 1);
+    --ease-quick: cubic-bezier(.3, 0, .2, 1);
+  }
+  [data-density="compact"] { --row: var(--row-compact); --control: var(--control-compact); --pad: var(--space-4); }
+  [data-density="comfortable"] { --row: var(--row-comfortable); --control: var(--control-comfortable); }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font: var(--type-body);
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, p { margin: 0; }
+  code { font-family: var(--font-mono); }
+  button, input, select, textarea { font: inherit; color: inherit; }
+
+  a { color: var(--moss); text-underline-offset: 3px; text-decoration-thickness: 1px; }
+
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  @keyframes cn-settle { from { transform: translateY(-2px); opacity: 0; } }
+  @keyframes cn-rise { from { transform: translateY(4px); opacity: 0; } }
+  @keyframes cn-fade-terracotta { from { background-color: var(--terracotta-soft); } }
+  @keyframes cn-fade-out { to { opacity: 0; } }
+  @keyframes cn-fade-in { from { opacity: 0; } }
+}
