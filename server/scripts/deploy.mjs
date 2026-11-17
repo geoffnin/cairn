@@ -3,7 +3,19 @@
 // Migrations go first when the database already exists, so new code never runs against an old
 // schema. On a first install the database does not exist until `wrangler deploy` creates it, so
 // then the order is deploy, then migrate.
+//
+// Accepts one option, --dry-run (npm run deploy -- --dry-run): it builds and checks the Worker
+// with `wrangler deploy --dry-run` and touches nothing remote, migrations included. Any other
+// argument is refused before anything runs, rather than silently ignored.
 import { spawnSync } from "node:child_process";
+
+const args = process.argv.slice(2);
+const unknown = args.filter((a) => a !== "--dry-run");
+if (unknown.length) {
+  console.error(`Unsupported option(s): ${unknown.join(" ")}. Only --dry-run is accepted; run wrangler directly for anything else.`);
+  process.exit(2);
+}
+const dryRun = args.includes("--dry-run");
 
 const wrangler = (...args) => {
   const r = spawnSync("npx", ["wrangler", ...args], { encoding: "utf8", stdio: ["inherit", "pipe", "pipe"] });
@@ -17,6 +29,11 @@ const fail = (step) => {
   console.error(`\n${step} failed; see the output above.`);
   process.exit(1);
 };
+
+if (dryRun) {
+  console.log("Dry run: checking the build only. No migrations, no deploy.\n");
+  process.exit(wrangler("deploy", "--dry-run").ok ? 0 : 1);
+}
 
 const first = migrate();
 if (first.ok) {

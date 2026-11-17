@@ -71,7 +71,8 @@ npm run deploy
 ```
 
 The first deploy creates the D1 database and KV namespace (named after the Worker) and applies
-the migrations; later deploys apply new migrations first, then deploy. To use a hostname of your
+the migrations; later deploys apply new migrations first, then deploy. `npm run deploy -- --dry-run`
+checks the build without touching your account. To use a hostname of your
 own, uncomment `routes` in `wrangler.jsonc`. Then turn on Access as in steps 1 to 3 above.
 
 **Using a separate Access application instead.** If the hostname is already protected by a
