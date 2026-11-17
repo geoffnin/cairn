@@ -147,25 +147,32 @@ export async function lookupTarget(env: Env, slug: string): Promise<string | nul
 
 // ---- CRUD ----
 
+// Links with the owner's email from users. links.owner is still written (see migration 0006) so
+// the previous Worker version keeps working during an upgrade; it is the fallback for rows that
+// version wrote without an owner_id.
+const SELECT_LINKS =
+  "SELECT l.slug, l.url, l.description, l.owner_id, l.created_at, l.updated_at, l.rev, " +
+  "COALESCE(u.email, NULLIF(l.owner, ''), '') AS owner FROM links l LEFT JOIN users u ON u.id = l.owner_id";
+
 export function getLink(env: Env, slug: string): Promise<Link | null> {
-  return env.DB.prepare("SELECT * FROM links WHERE slug = ?").bind(slug).first<Link>();
+  return env.DB.prepare(`${SELECT_LINKS} WHERE l.slug = ?`).bind(slug).first<Link>();
 }
 
-export async function listLinks(env: Env, opts: { q?: string; owner?: string; limit?: number }): Promise<Link[]> {
+export async function listLinks(env: Env, opts: { q?: string; ownerId?: string; limit?: number }): Promise<Link[]> {
   const where: string[] = [];
   const args: unknown[] = [];
   if (opts.q) {
     const like = `%${opts.q.toLowerCase().replace(/[\\%_]/g, "\\$&")}%`;
-    where.push("(slug LIKE ? ESCAPE '\\' OR lower(url) LIKE ? ESCAPE '\\' OR lower(description) LIKE ? ESCAPE '\\')");
+    where.push("(l.slug LIKE ? ESCAPE '\\' OR lower(l.url) LIKE ? ESCAPE '\\' OR lower(l.description) LIKE ? ESCAPE '\\')");
     args.push(like, like, like);
   }
-  if (opts.owner) {
-    where.push("owner = ?");
-    args.push(opts.owner);
+  if (opts.ownerId) {
+    where.push("l.owner_id = ?");
+    args.push(opts.ownerId);
   }
   // SQLite treats a negative LIMIT as "no limit", so clamp to a whole number in 1-500.
   const limit = opts.limit !== undefined && Number.isFinite(opts.limit) ? Math.min(Math.max(Math.trunc(opts.limit), 1), 500) : 500;
-  const sql = `SELECT * FROM links ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY slug LIMIT ?`;
+  const sql = `${SELECT_LINKS} ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY l.slug LIMIT ?`;
   const { results } = await env.DB.prepare(sql)
     .bind(...args, limit)
     .all<Link>();
@@ -175,13 +182,13 @@ export async function listLinks(env: Env, opts: { q?: string; owner?: string; li
 /** Returns null if the slug is already taken. */
 export async function createLink(
   env: Env,
-  link: Pick<Link, "slug" | "url" | "description" | "owner">,
+  link: Pick<Link, "slug" | "url" | "description" | "owner_id" | "owner">,
 ): Promise<Link | null> {
   const now = nowSeconds();
   const res = await env.DB.prepare(
-    "INSERT INTO links (slug, url, description, owner, created_at, updated_at, rev) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (slug) DO NOTHING",
+    "INSERT INTO links (slug, url, description, owner_id, owner, created_at, updated_at, rev) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (slug) DO NOTHING",
   )
-    .bind(link.slug, link.url, link.description, link.owner, now, now, newRev())
+    .bind(link.slug, link.url, link.description, link.owner_id, link.owner, now, now, newRev())
     .run();
   if (!res.meta.changes) return null;
   memSet(env, link.slug, link.url);
@@ -194,13 +201,13 @@ export async function updateLink(
   env: Env,
   slug: string,
   rev: string,
-  patch: Pick<Link, "url" | "description" | "owner">,
+  patch: Pick<Link, "url" | "description" | "owner_id" | "owner">,
 ): Promise<Link | null> {
   await kvClear(env, slug);
   const res = await env.DB.prepare(
-    "UPDATE links SET url = ?, description = ?, owner = ?, updated_at = ?, rev = ? WHERE slug = ? AND rev = ?",
+    "UPDATE links SET url = ?, description = ?, owner_id = ?, owner = ?, updated_at = ?, rev = ? WHERE slug = ? AND rev = ?",
   )
-    .bind(patch.url, patch.description, patch.owner, nowSeconds(), newRev(), slug, rev)
+    .bind(patch.url, patch.description, patch.owner_id, patch.owner, nowSeconds(), newRev(), slug, rev)
     .run();
   if (!res.meta.changes) {
     mem.delete(slug);

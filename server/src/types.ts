@@ -29,6 +29,9 @@ export interface Link {
   slug: string;
   url: string;
   description: string;
+  /** Opaque ID of the owner (users.id). */
+  owner_id: string;
+  /** The owner's email for the API and UI (from users; see SELECT_LINKS). Never logged. */
   owner: string;
   created_at: number;
   updated_at: number;

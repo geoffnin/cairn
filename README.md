@@ -118,28 +118,35 @@ links people expect. The event never contains the full destination URL or who cl
 
 Changes to links write their own events: `cairn.link.create`, `cairn.link.update` and
 `cairn.link.delete`. Each records the link, its owner, the destination's host, **who made the
-change** (`user.email`) and whether an admin changed someone else's link
-(`user.admin_override`). Updates also say which fields changed and what the previous host or
-owner was:
+change** and whether an admin changed someone else's link (`user.admin_override`). Updates also
+say which fields changed and what the previous host or owner was:
 
 ```json
 {
   "event.name": "cairn.link.update",
   "link.slug": "roadmap",
-  "link.owner": "bob@example.com",
+  "link.owner_id": "5f0c9a7e3b2d41e8a6c1d9f04b7e2a13",
   "link.target_host": "new-docs.example.com",
   "link.has_description": true,
   "link.has_placeholder": false,
   "link.changed": "owner,url",
   "link.previous_target_host": "docs.example.com",
-  "link.previous_owner": "alice@example.com",
-  "user.email": "alice@example.com",
+  "link.previous_owner_id": "c41d8e2a9b7f4c06a3e5d1b28f6a0c77",
+  "user.id": "c41d8e2a9b7f4c06a3e5d1b28f6a0c77",
   "user.admin_override": false,
   "client.kind": "browser"
 }
 ```
 
 Saves that change nothing, and changes that are refused, are not logged.
+
+**No email addresses are logged.** People appear as random IDs (`user.id`, `link.owner_id`).
+IDs are linked to emails only inside Cairn's own D1 database (the `users` table), which the
+web UI uses to show owners. To find out who an ID is, query that table:
+
+```sh
+npx wrangler d1 execute DB --remote --command "SELECT email FROM users WHERE id = '<id>'"
+```
 
 Cloudflare collects these lines for you. They are searchable in the dashboard under Workers
 Logs straight away. To get them into your own platform:

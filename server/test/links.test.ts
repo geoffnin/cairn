@@ -66,7 +66,7 @@ describe("redirects", () => {
   });
 
   it("reads D1 on a KV miss without writing KV (only changes write it)", async () => {
-    await env.DB.exec("INSERT INTO links (slug,url,owner,created_at,updated_at) VALUES ('cold','https://cold.test/','a@b.c',1,1)");
+    await env.DB.exec("INSERT INTO links (slug,url,owner,owner_id,created_at,updated_at) VALUES ('cold','https://cold.test/','a@b.c','u1',1,1)");
     expect((await call("/cold")).headers.get("location")).toBe("https://cold.test/");
     expect(await env.CACHE.get("l:cold")).toBeNull();
   });
@@ -188,7 +188,7 @@ describe("redirect cache TTL", () => {
     clock(T0);
     expect(await where("soon")).toBe("/_/?new=soon");
     // Created through another isolate: this one's memory still says "unknown".
-    await env.DB.exec("INSERT INTO links (slug,url,owner,created_at,updated_at) VALUES ('soon','https://soon.test/','a@b.c',1,1)");
+    await env.DB.exec("INSERT INTO links (slug,url,owner,owner_id,created_at,updated_at) VALUES ('soon','https://soon.test/','a@b.c','u1',1,1)");
     clock(T0 + 4_000);
     expect(await where("soon")).toBe("/_/?new=soon");
     clock(T0 + 6_000);
@@ -239,7 +239,7 @@ describe("review fixes", () => {
     await create("race", "https://one.test/");
     const seen = (await getLink(env, "race"))!;
     await put("race", { owner: "bob@example.com" }); // ownership handed over meanwhile
-    expect(await updateLink(env, "race", seen.rev, { url: seen.url, description: "", owner: "alice@example.com" })).toBeNull();
+    expect(await updateLink(env, "race", seen.rev, { url: seen.url, description: "", owner_id: seen.owner_id, owner: seen.owner })).toBeNull();
     expect((await get("race")).owner).toBe("bob@example.com");
 
     // Deleted and recreated by someone else meanwhile: the old delete must not remove it.

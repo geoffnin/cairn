@@ -13,6 +13,7 @@ import {
 } from "./links";
 import type { Env, Link, User } from "./types";
 import { linkCreated, linkDeleted, linkUpdated, logEvent, metricsUrl } from "./events";
+import { userIdFor } from "./users";
 import { json } from "./util";
 
 const canEdit = (user: User, link: Link) => user.isAdmin || link.owner === user.email;
@@ -66,7 +67,7 @@ export async function handleApi(req: Request, env: Env, user: User, path: string
         const p = new URL(req.url).searchParams;
         const links = await listLinks(env, {
           q: p.get("q")?.trim() || undefined,
-          owner: p.get("owner") === "me" ? user.email : undefined,
+          ownerId: p.get("owner") === "me" ? await userIdFor(env, user.email) : undefined,
           limit: p.get("limit") ? Number(p.get("limit")) : undefined,
         });
         return json({ links: links.map((l) => present(env, user, l)) });
@@ -74,14 +75,12 @@ export async function handleApi(req: Request, env: Env, user: User, path: string
       if (req.method === "POST") {
         const b = await body(req);
         const slug = normalizeSlug(b.slug);
-        const link = await createLink(env, {
-          slug,
-          url: validateUrl(b.url),
-          description: validateDescription(b.description),
-          owner: user.email,
-        });
+        const url = validateUrl(b.url);
+        const description = validateDescription(b.description);
+        const actorId = await userIdFor(env, user.email);
+        const link = await createLink(env, { slug, url, description, owner_id: actorId, owner: user.email });
         if (!link) return json({ error: `go/${slug} already exists.` }, 409);
-        logEvent(linkCreated(req, user.email, slug, link));
+        logEvent(linkCreated(req, actorId, slug, link));
         return json(present(env, user, link), 201);
       }
     }
@@ -99,23 +98,31 @@ export async function handleApi(req: Request, env: Env, user: User, path: string
       // checked above, so nothing that changed in between can be overwritten.
       const stale = () => json({ error: `go/${slug} was changed by someone else. Reload and try again.` }, 409);
 
+      // Resolved before changing anything, so a failure here cannot follow a committed change
+      // and lose its event. A row written by the previous Worker version during an upgrade has
+      // no owner ID yet; it gets one from its owner's email.
+      const actorId = await userIdFor(env, user.email);
+      const currentOwnerId = link.owner_id || (link.owner ? await userIdFor(env, link.owner) : "");
+      const linkBefore = { ...link, owner_id: currentOwnerId };
+
       if (req.method === "PUT") {
         const b = await body(req);
         if (b.rev !== undefined && b.rev !== link.rev) return stale();
-        const updated = await updateLink(env, slug, link.rev, {
-          url: b.url === undefined ? link.url : validateUrl(b.url),
-          description: b.description === undefined ? link.description : validateDescription(b.description),
-          owner: b.owner === undefined ? link.owner : validateOwner(b.owner),
-        });
+        const url = b.url === undefined ? link.url : validateUrl(b.url);
+        const description = b.description === undefined ? link.description : validateDescription(b.description);
+        // Handing a link to someone who has never signed in gives them an ID now.
+        const owner = b.owner === undefined ? link.owner : validateOwner(b.owner);
+        const ownerId = b.owner === undefined ? currentOwnerId : await userIdFor(env, owner);
+        const updated = await updateLink(env, slug, link.rev, { url, description, owner_id: ownerId, owner });
         if (!updated) return stale();
-        logEvent(linkUpdated(req, user.email, slug, link, updated));
+        logEvent(linkUpdated(req, actorId, slug, linkBefore, updated));
         return json(present(env, user, updated));
       }
       if (req.method === "DELETE") {
         const expected = new URL(req.url).searchParams.get("rev");
         if (expected !== null && expected !== link.rev) return stale();
         if (!(await deleteLink(env, slug, link.rev))) return stale();
-        logEvent(linkDeleted(req, user.email, slug, link));
+        logEvent(linkDeleted(req, actorId, slug, linkBefore));
         return json({ ok: true });
       }
     }
