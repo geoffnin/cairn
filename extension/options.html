@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cairn Go Links settings</title>
+<link rel="stylesheet" href="ui.css">
+<style>body { padding: 32px 16px; } main { max-width: 480px; margin: 0 auto; }</style>
+</head>
+<body>
+<main>
+  <h1>Cairn Go Links</h1>
+  <form id="form">
+    <label for="server">Server URL</label>
+    <input id="server" type="text" required placeholder="https://go.example.com" spellcheck="false" autocomplete="off">
+    <p class="hint" id="hint">The address of your company's Cairn server. Ask whoever runs it if you are unsure.</p>
+    <div class="row"><button id="save" type="submit">Save</button></div>
+  </form>
+  <p class="msg" id="msg" role="status"></p>
+  <p class="hint">Once saved, type <b>go/name</b> in the address bar, or <b>go</b> then space then a name to search.</p>
+</main>
+<script type="module" src="options.js"></script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+# Copy to .dev.vars for `npm run dev`. Never commit .dev.vars.
+AUTH_MODE=dev
+DEV_USER_EMAIL=dev@example.com
+SESSION_SECRET=local-dev-only-secret-change-me-0123456789

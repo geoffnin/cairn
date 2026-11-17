@@ -1,0 +1,52 @@
+// Cairn go-links server. See ../README.md for setup.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cairn",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "observability": { "enabled": true },
+
+  // Put the Worker on your own hostname, e.g. go.example.com:
+  // "routes": [{ "pattern": "go.example.com", "custom_domain": true }],
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "cairn",
+      // Replace with the id printed by `wrangler d1 create cairn`.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "CACHE",
+      // Replace with the id printed by `wrangler kv namespace create CACHE`.
+      "id": "00000000000000000000000000000000"
+    }
+  ],
+
+  "vars": {
+    // "oidc"   - built-in OpenID Connect login (Okta, Entra ID, Google, Keycloak, ...)
+    // "access" - trust Cloudflare Access in front of the Worker (use this for SAML IdPs)
+    // "dev"    - no login; only honoured on localhost
+    "AUTH_MODE": "oidc",
+
+    // --- AUTH_MODE=oidc ---
+    "OIDC_ISSUER": "",          // e.g. https://your-org.okta.com
+    "OIDC_CLIENT_ID": "",
+    "OIDC_SCOPES": "openid email profile",
+    // secrets: OIDC_CLIENT_SECRET, SESSION_SECRET  (wrangler secret put ...)
+
+    // --- AUTH_MODE=access ---
+    "ACCESS_TEAM_DOMAIN": "",   // e.g. your-team.cloudflareaccess.com
+    "ACCESS_AUD": "",           // Application Audience (AUD) tag
+
+    // --- authorization ---
+    "ADMIN_EMAILS": "",          // comma separated; admins can edit/delete any link
+    "ADMIN_GROUPS": "",          // comma separated; matched against the `groups` claim
+    "ALLOWED_EMAIL_DOMAINS": "", // comma separated; empty = anyone the IdP lets in
+
+    "SESSION_TTL_HOURS": "24"
+  }
+}
