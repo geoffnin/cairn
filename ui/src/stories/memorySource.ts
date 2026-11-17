@@ -1,14 +1,16 @@
 // Stories only: a LinkSource that keeps links in memory, like the extension's local mode.
 import type { Link, LinkSource } from "../lib/links";
 
-export function memorySource(initial: Link[] = [], shared = false): LinkSource {
+/** `me` is who is signed in, for "Only mine" on a shared server. */
+export function memorySource(initial: Link[] = [], shared = false, me?: string): LinkSource {
   const links = new Map(initial.map((l) => [l.slug, { ...l }]));
   return {
     shared,
-    async list({ q }) {
+    async list({ q, mine }) {
       const term = q.toLowerCase();
       return [...links.values()]
         .filter((l) => !term || [l.slug, l.url, l.description].some((v) => v.toLowerCase().includes(term)))
+        .filter((l) => !mine || l.owner === me)
         .sort((a, b) => a.slug.localeCompare(b.slug));
     },
     async create(l) {
