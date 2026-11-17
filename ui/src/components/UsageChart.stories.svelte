@@ -32,11 +32,22 @@
     ],
     active: 2,
   }}
-  play={async ({ canvas }) => {
-    const value = canvas.getByRole("slider").getAttribute("aria-valuetext");
-    await expect(value).toMatch(/Change 1: Description changed by maya@\. Change 2: Owner changed by maya@$/);
-    await expect(canvas.getByText("2", { selector: ".marker text" })).toBeInTheDocument();
-    await expect(canvas.getByText("1", { selector: ".marker text" })).toBeInTheDocument();
+  play={async ({ canvas, canvasElement, userEvent }) => {
+    const chart = canvas.getByRole("slider");
+    const chosen = () => canvasElement.querySelector(".tip-change.on")?.textContent ?? "";
+    await expect(chart.getAttribute("aria-valuetext")).toMatch(/Change 1: Description changed by maya@\. Change 2 \(chosen\): Owner changed by maya@$/);
+    // Keyboard: Up and Down move between the day's changes.
+    chart.focus();
+    await userEvent.keyboard("{ArrowDown}");
+    await expect(chosen()).toContain("Description changed");
+    await expect(chart.getAttribute("aria-valuetext")).toContain("Change 1 (chosen)");
+    await userEvent.keyboard("{ArrowUp}");
+    await expect(chosen()).toContain("Owner changed");
+    // Pointer: each number is its own target.
+    await userEvent.hover(canvasElement.querySelector('.label[data-change="1"] rect')!);
+    await expect(chosen()).toContain("Description changed");
+    await userEvent.hover(canvasElement.querySelector('.label[data-change="2"] rect')!);
+    await expect(chosen()).toContain("Owner changed");
   }}
 />
 <Story name="Empty range" args={{ days: [], changes: [] }} play={async ({ canvas }) => {

@@ -1,6 +1,7 @@
 <!-- Uses per day as a line, with each change to the link as a numbered terracotta marker, so a
      jump or a drop can be read against what changed. Pointing at the chart, or focusing it and
-     using the arrow keys, reads out a day (and its change). `active` is the change being looked
+     using the arrow keys, reads out a day (and its changes). When a day has more than one change,
+     Up and Down (or pointing at a number) choose between them. `active` is the change being looked
      at, shared with the History list: pointing at a change in either highlights it in both. -->
 <script lang="ts">
   import { formatCount, formatDay } from "../lib/format";
@@ -25,7 +26,9 @@
   const dayChanges = $derived(shown === null ? [] : changesOn(shown));
   const valueText = $derived(
     point
-      ? `${formatDay(point.date)}: ${formatCount(point.uses)} uses${dayChanges.map((c) => `. Change ${c.n}: ${c.what} by ${c.by}`).join("")}`
+      ? `${formatDay(point.date)}: ${formatCount(point.uses)} uses${dayChanges
+          .map((c) => `. Change ${c.n}${dayChanges.length > 1 && c.n === active ? " (chosen)" : ""}: ${c.what} by ${c.by}`)
+          .join("")}`
       : "No day chosen",
   );
 
@@ -37,12 +40,25 @@
     if (!here.some((c) => c.n === active)) active = here[0]?.n ?? null;
   }
   function onpointermove(e: PointerEvent) {
+    // Over a change's number, that change is chosen (see the label's handler), not the day under x.
+    if ((e.target as Element).closest?.(".label")) return;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     look(indexAtX(((e.clientX - rect.left) / rect.width) * box.width, days.length));
+  }
+  /** Points at one change: its day, and it among that day's changes. */
+  function choose(index: number, n: number) {
+    hover = index;
+    active = n;
   }
   function onkeydown(e: KeyboardEvent) {
     const last = days.length - 1;
     const from = shown ?? last;
+    if ((e.key === "ArrowUp" || e.key === "ArrowDown") && dayChanges.length > 1) {
+      e.preventDefault();
+      const at = Math.max(0, dayChanges.findIndex((c) => c.n === active));
+      const step = e.key === "ArrowDown" ? 1 : -1;
+      return choose(from, dayChanges[(at + step + dayChanges.length) % dayChanges.length]!.n);
+    }
     const next = { ArrowLeft: from - 1, ArrowRight: from + 1, Home: 0, End: last, PageUp: from - 7, PageDown: from + 7 }[e.key];
     if (next === undefined) return;
     e.preventDefault();
@@ -72,8 +88,13 @@
     {#each model.markers as m (m.change.n)}
       <g class="marker" class:on={m.change.n === active}>
         <line x1={m.x} x2={m.x} y1={box.top} y2={box.bottom} />
-        <rect x={m.x - 7 + m.slot * 16} y={0} width="14" height="14" rx="3" />
-        <text x={m.x + m.slot * 16} y={11} text-anchor="middle">{m.change.n}</text>
+        <!-- The number's own target, so each of a day's changes can be pointed at; the keyboard
+             way is Up and Down on the slider. -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <g class="label" data-change={m.change.n} onpointerenter={() => choose(m.index, m.change.n)}>
+          <rect x={m.x - 7 + m.slot * 16} y={0} width="14" height="14" rx="3" />
+          <text x={m.x + m.slot * 16} y={11} text-anchor="middle">{m.change.n}</text>
+        </g>
       </g>
     {/each}
     {#if point}
@@ -103,7 +124,8 @@
   .line { fill: none; stroke: var(--moss); stroke-width: 1.5; stroke-linejoin: round; }
   .marker line { stroke: var(--ink-muted); stroke-width: 1; stroke-dasharray: 2 3; }
   .marker rect { fill: var(--terracotta); }
-  .marker text { fill: var(--surface); font-size: 10px; font-weight: 600; }
+  .marker text { fill: var(--surface); font-size: 10px; font-weight: 600; pointer-events: none; }
+  .marker .label { cursor: pointer; }
   .marker.on line { stroke: var(--terracotta); stroke-dasharray: none; }
   .hover line { stroke: var(--ink-faint); stroke-width: 1; }
   .halo { fill: var(--surface); }

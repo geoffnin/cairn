@@ -15,8 +15,9 @@ export function memorySource(initial: Link[] = [], shared = false, me?: string):
     },
     async create(l) {
       if (links.has(l.slug)) throw new Error(`go/${l.slug} already exists.`);
-      links.set(l.slug, { ...l });
-      return { ...l };
+      const link = shared && me ? { ...l, owner: me } : { ...l };
+      links.set(l.slug, link);
+      return { ...link };
     },
     async update(l, changes) {
       links.set(l.slug, { ...l, ...changes });
