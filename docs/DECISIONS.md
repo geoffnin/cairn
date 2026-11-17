@@ -970,6 +970,49 @@ no visible owner, so it needs a decision on who inherits them first.
 
 ---
 
+## D28. Tracing with the runtime's spans plus a few of Cairn's own
+
+**Date:** 2026-11-17 · **Status:** accepted
+
+**Decision.** `observability.traces` is enabled at 10% head sampling. The Workers runtime traces
+each request and every KV, D1 and `fetch` call itself. Cairn adds three spans through the
+runtime's own span API (`tracing.enterSpan` from `cloudflare:workers`), wrapped in
+`src/tracing.ts`:
+
+- `cairn.link.lookup` with `cache.layer` (`memory`, `kv`, `d1`) and `link.found`, the main
+  performance signal for redirects;
+- `cairn.auth` with `auth.method` and whether the Access identity came from the cache;
+- `cairn.api` with method, route (link names replaced by `:slug`, so spans group by operation)
+  and status.
+
+Exceptions and rejected promises are recorded on the span and rethrown.
+
+**Why this approach.** Of the options considered (runtime tracing, a Tail Worker acting as a
+collector, the `otel-cf-workers` library), runtime tracing has no exporter code in Cairn and no
+extra outbound requests: Cloudflare ships spans over OTLP, off the request path, to any platform.
+A Tail Worker would add tail sampling (keep every slow or failed request) and scrubbing, at the
+cost of code to maintain; worth adding if head sampling proves too coarse. The library would
+duplicate what the runtime now does natively.
+
+**Choices.**
+
+- *10% sampling* because traces are for latency, not counting; logs stay at 100% for exact
+  click counts (D17), and the two rates are independent.
+- *No emails in spans*, matching D27. Attributes are link names, layers, methods, routes and
+  status codes. Nothing a visitor types is recorded verbatim: a requested name that is not valid
+  link syntax becomes `(invalid)` (also in the click log event, which recorded it as typed
+  before), and unknown API paths become the route `unknown`. Recorded exceptions have emails
+  redacted from message and stack, since some errors name the person ("x@y is not allowed").
+  A test sends emails through each of these paths and checks nothing recorded contains `@`.
+- *Testable without the runtime.* The wrapper accepts a recording tracer in tests. In the local
+  runtime the real API works but records nothing, so calling it costs a function call.
+
+**Not verified.** The span API is recent (June 2026). What a real export looks like (span
+nesting under the runtime's spans, attribute names at the destination) needs a deployed Worker
+with tracing on.
+
+---
+
 ## Deferred
 
 Not built, on purpose, until someone needs them:

@@ -12,6 +12,7 @@
 //   AUTH_MODE=access (default)  as above
 //   AUTH_MODE=dev               fixed user, honoured on localhost only, for `wrangler dev`
 import { verifyJwt } from "./jwt";
+import { inSpan, type SpanHandle } from "./tracing";
 import type { Env, User } from "./types";
 import { csv, redirect } from "./util";
 
@@ -66,9 +67,10 @@ const IDENTITY_TTL_MS = 60_000;
 const IDENTITY_MAX = 1000;
 const identities = new Map<string, { user: User; exp: number }>();
 
-async function fromWorkerAccess(req: Request, env: Env, access: CloudflareAccessContext): Promise<User> {
+async function fromWorkerAccess(req: Request, env: Env, access: CloudflareAccessContext, span: SpanHandle): Promise<User> {
   const token = req.headers.get("cf-access-jwt-assertion");
   const cached = token ? identities.get(token) : undefined;
+  span.setAttribute("auth.identity_cached", !!(cached && cached.exp > Date.now()));
   if (cached && cached.exp > Date.now()) {
     assertAllowed(env, cached.user.email);
     return cached.user;
@@ -89,14 +91,23 @@ async function fromWorkerAccess(req: Request, env: Env, access: CloudflareAccess
 }
 
 /** Returns the signed-in user, or throws AuthError. */
-export async function authenticate(req: Request, env: Env, ctx?: ExecutionContext): Promise<User> {
+export function authenticate(req: Request, env: Env, ctx?: ExecutionContext): Promise<User> {
+  return inSpan("cairn.auth", {}, (span) => authenticateIn(req, env, ctx, span));
+}
+
+async function authenticateIn(req: Request, env: Env, ctx: ExecutionContext | undefined, span: SpanHandle): Promise<User> {
   if (mode(env) === "dev") {
+    span.setAttribute("auth.method", "dev");
     if (!isLocalhost(req)) throw new AuthError("AUTH_MODE=dev only works on localhost.", 500);
     return toUser(env, env.DEV_USER_EMAIL || "dev@example.com", "Dev User", []);
   }
 
   // Present only when Access is on for this Worker and has authenticated this request.
-  if (ctx?.access) return fromWorkerAccess(req, env, ctx.access);
+  if (ctx?.access) {
+    span.setAttribute("auth.method", "worker_access");
+    return fromWorkerAccess(req, env, ctx.access, span);
+  }
+  span.setAttribute("auth.method", "access_jwt");
 
   if (!env.ACCESS_TEAM_DOMAIN || !env.ACCESS_AUD) {
     throw new AuthError(

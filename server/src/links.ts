@@ -7,11 +7,24 @@
 // read from D1 could land after a concurrent edit had updated KV and put the old destination
 // back. Changes clear the KV entry before touching D1 (and refuse to proceed if they cannot),
 // then write the new value; a missing entry just means reads go to D1.
+import { inSpan } from "./tracing";
 import type { Env, Link } from "./types";
 import { nowSeconds } from "./util";
 
 export const PLACEHOLDER = "{*}";
 const SLUG_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+
+/** Placeholder recorded instead of a requested name that could never be a link. */
+export const INVALID_SLUG = "(invalid)";
+
+/**
+ * The link name as it may appear in logs and traces: the name if it is valid link syntax, else a
+ * fixed placeholder. Visitors can request any path (go/alice@example.com), and recording it
+ * verbatim would put arbitrary text, emails included, into telemetry.
+ */
+export function slugForTelemetry(slug: string): string {
+  return SLUG_RE.test(slug) ? slug : INVALID_SLUG;
+}
 const DEFAULT_CACHE_SECONDS = 30;
 const MAX_CACHE_SECONDS = 3600;
 /** Unknown names are remembered briefly, so a link someone just created shows up quickly. */
@@ -126,23 +139,32 @@ async function kvFill(env: Env, slug: string, url: string): Promise<void> {
 const newRev = () => crypto.randomUUID();
 
 /** Redirect hot path: slug -> target URL, or null if there is no such link. */
-export async function lookupTarget(env: Env, slug: string): Promise<string | null> {
-  const hit = mem.get(slug);
-  if (hit && hit.exp > Date.now()) return hit.url;
+export function lookupTarget(env: Env, slug: string): Promise<string | null> {
+  // cache.layer says which layer answered: the main performance signal for redirects.
+  return inSpan("cairn.link.lookup", { "link.slug": slugForTelemetry(slug) }, async (span) => {
+    const answer = (layer: "memory" | "kv" | "d1", url: string | null) => {
+      span.setAttributes({ "cache.layer": layer, "link.found": url !== null });
+      return url;
+    };
+    const hit = mem.get(slug);
+    if (hit && hit.exp > Date.now()) return answer("memory", hit.url);
 
-  let url: string | null = null;
-  try {
-    url = await env.CACHE.get(`l:${slug}`);
-  } catch (e) {
-    console.warn("cache read failed", slug, e);
-  }
-  if (url === null) {
-    // Not written back to KV: see the note at the top of this file.
-    const row = await env.DB.prepare("SELECT url FROM links WHERE slug = ?").bind(slug).first<{ url: string }>();
-    url = row?.url ?? null;
-  }
-  memSet(env, slug, url);
-  return url;
+    let url: string | null = null;
+    try {
+      url = await env.CACHE.get(`l:${slug}`);
+    } catch (e) {
+      console.warn("cache read failed", slug, e);
+      span.setAttribute("cache.kv_error", true);
+    }
+    const layer = url === null ? "d1" : "kv";
+    if (url === null) {
+      // Not written back to KV: see the note at the top of this file.
+      const row = await env.DB.prepare("SELECT url FROM links WHERE slug = ?").bind(slug).first<{ url: string }>();
+      url = row?.url ?? null;
+    }
+    memSet(env, slug, url);
+    return answer(layer, url);
+  });
 }
 
 // ---- CRUD ----

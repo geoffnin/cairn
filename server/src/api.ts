@@ -13,6 +13,7 @@ import {
 } from "./links";
 import type { Env, Link, User } from "./types";
 import { linkCreated, linkDeleted, linkUpdated, logEvent, metricsUrl } from "./events";
+import { inSpan } from "./tracing";
 import { userIdFor } from "./users";
 import { json } from "./util";
 
@@ -53,7 +54,18 @@ function validateOwner(raw: unknown): string {
   return owner;
 }
 
-export async function handleApi(req: Request, env: Env, user: User, path: string): Promise<Response> {
+export function handleApi(req: Request, env: Env, user: User, path: string): Promise<Response> {
+  // A fixed label per known route (link names replaced), never the raw path: spans group by
+  // operation, and nothing a visitor types (an email, say) reaches telemetry.
+  const route = path === "/me" || path === "/links" ? path : /^\/links\/[^/]+$/.test(path) ? "/links/:slug" : "unknown";
+  return inSpan("cairn.api", { "http.method": req.method, "cairn.api.route": route }, async (span) => {
+    const res = await apiRoute(req, env, user, path);
+    span.setAttribute("http.status_code", res.status);
+    return res;
+  });
+}
+
+async function apiRoute(req: Request, env: Env, user: User, path: string): Promise<Response> {
   const write = req.method !== "GET" && req.method !== "HEAD";
   if (write) {
     const denied = checkCsrf(req);
