@@ -13,6 +13,7 @@ import {
 } from "./links";
 import type { Env, Link, User } from "./types";
 import { linkCreated, linkDeleted, linkUpdated, logEvent, metricsUrl } from "./events";
+import { inSpan } from "./tracing";
 import { userIdFor } from "./users";
 import { json } from "./util";
 
@@ -53,7 +54,17 @@ function validateOwner(raw: unknown): string {
   return owner;
 }
 
-export async function handleApi(req: Request, env: Env, user: User, path: string): Promise<Response> {
+export function handleApi(req: Request, env: Env, user: User, path: string): Promise<Response> {
+  // Route with the link name replaced, so spans group by operation, not by link.
+  const route = path.replace(/^\/links\/[^/]+$/, "/links/:slug");
+  return inSpan("cairn.api", { "http.method": req.method, "cairn.api.route": route }, async (span) => {
+    const res = await apiRoute(req, env, user, path);
+    span.setAttribute("http.status_code", res.status);
+    return res;
+  });
+}
+
+async function apiRoute(req: Request, env: Env, user: User, path: string): Promise<Response> {
   const write = req.method !== "GET" && req.method !== "HEAD";
   if (write) {
     const denied = checkCsrf(req);

@@ -23,6 +23,16 @@
       "invocation_logs": true, // Cloudflare's own per-request log line; false halves log volume
       "persist": true,         // also keep them in Workers Logs, queryable in the dashboard
       "destinations": []       // e.g. ["grafana-logs"]
+    },
+    // Traces: the runtime records the request and every KV, D1 and fetch call; Cairn adds spans
+    // for the redirect lookup (which cache layer answered), sign-in and API calls (src/tracing.ts).
+    // Sampled at 10%: traces are for latency, not counting. Send them to any OTLP endpoint the
+    // same way as logs: create a destination in the dashboard and list its name here.
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.1,
+      "persist": true,
+      "destinations": []       // e.g. ["grafana-traces"]
     }
   },
 

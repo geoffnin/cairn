@@ -164,6 +164,25 @@ Exporting to a third party may need the Workers Paid plan, so check Cloudflare's
 pricing. Keep `head_sampling_rate` at `1`, or counts will be sampled. The reasoning is in
 [decision D17](docs/DECISIONS.md).
 
+## Tracing (optional)
+
+Traces are on, sampled at 10% of requests. Cloudflare records the request and every KV, D1 and
+outgoing call by itself; Cairn adds three spans:
+
+| Span | Attributes |
+|---|---|
+| `cairn.link.lookup` | `link.slug`, `cache.layer` (`memory`, `kv` or `d1`), `link.found` |
+| `cairn.auth` | `auth.method` (`worker_access`, `access_jwt` or `dev`), `auth.identity_cached` |
+| `cairn.api` | `http.method`, `cairn.api.route` (e.g. `/links/:slug`), `http.status_code` |
+
+Failures are recorded as exceptions on the span. No span carries an email address.
+
+Traces are visible in the Cloudflare dashboard straight away. To send them to your own platform
+over OpenTelemetry, create a traces destination in the dashboard and add its name to
+`observability.traces.destinations` in `wrangler.jsonc`, as for logs. Change
+`head_sampling_rate` to trace more or fewer requests; it does not affect logs, which stay at
+100% so click counts are exact. Exporting to a third party may need the Workers Paid plan.
+
 ## Install the extension
 
 **Try it:** open `chrome://extensions`, turn on Developer mode, choose **Load unpacked** and pick
