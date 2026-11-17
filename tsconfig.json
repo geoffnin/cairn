@@ -1,5 +1,5 @@
 {
-  // Type-checks the shared UI, the server's web app and the extension (svelte-check).
+  // Type-checks the shared UI and its stories, the server's web app and the extension (svelte-check).
   // The Worker has its own tsconfig in server/.
   "compilerOptions": {
     "target": "ES2022",
@@ -15,5 +15,5 @@
     "allowJs": true,
     "checkJs": false
   },
-  "include": ["ui/src", "web/src", "extension/src", "extension/*.js"]
+  "include": ["ui/src", "web/src", "extension/src", "extension/*.js", ".storybook/*.ts"]
 }
