@@ -56,9 +56,8 @@ const PAGE = /* html */ `<!doctype html>
   td.name a { color: var(--accent); text-decoration: none; font-weight: 600; }
   td.url { max-width: 340px; overflow-wrap: anywhere; }
   td.url small { display: block; color: var(--muted); }
-  td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  td.num a { color: var(--accent); text-decoration: none; }
-  td.num a:hover { text-decoration: underline; }
+  td.act a { color: var(--accent); text-decoration: none; padding: 2px 4px; }
+  td.act a:hover { text-decoration: underline; }
   td.act { white-space: nowrap; text-align: right; }
   .empty { color: var(--muted); padding: 24px 8px; text-align: center; }
   dialog { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--text);
@@ -105,7 +104,7 @@ const PAGE = /* html */ `<!doctype html>
     </div>
     <div class="scroll">
       <table>
-        <thead><tr><th>Name</th><th>Destination</th><th>Owner</th><th style="text-align:right">Uses</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Destination</th><th>Owner</th><th></th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
     </div>
@@ -156,6 +155,9 @@ let editing = null;
 
 function row(l) {
   const actions = el('td', { className: 'act' });
+  if (l.metrics_url) {
+    actions.append(el('a', { href: l.metrics_url, target: '_blank', rel: 'noopener noreferrer', title: 'Open the metrics dashboard for ' + P + l.slug, textContent: 'Metrics ↗' }));
+  }
   if (l.can_edit) {
     const edit = el('button', { className: 'link', type: 'button', textContent: 'Edit' });
     edit.onclick = () => openEdit(l);
@@ -173,9 +175,6 @@ function row(l) {
     el('td', { className: 'name' }, el('a', { href: '/' + encodeURIComponent(l.slug), textContent: P + l.slug })),
     dest,
     el('td', { textContent: l.owner }),
-    el('td', { className: 'num' }, l.metrics_url
-      ? el('a', { href: l.metrics_url, target: '_blank', rel: 'noopener noreferrer', title: 'Open the metrics dashboard for ' + P + l.slug, textContent: l.clicks + ' ↗' })
-      : String(l.clicks)),
     actions);
 }
 
@@ -189,7 +188,7 @@ async function load() {
     const { links } = await api('GET', '/links?' + p);
     if (id !== seq) return;
     const empty = q || mine ? 'No links match.' : 'No links yet. Create the first one above.';
-    $('rows').replaceChildren(...(links.length ? links.map(row) : [el('tr', null, el('td', { className: 'empty', colSpan: 5, textContent: empty }))]));
+    $('rows').replaceChildren(...(links.length ? links.map(row) : [el('tr', null, el('td', { className: 'empty', colSpan: 4, textContent: empty }))]));
   } catch (e) { say('l-msg', e.message, true); }
 }
 

@@ -25,14 +25,12 @@ describe("resolveTarget", () => {
 });
 
 describe("redirects", () => {
-  it("redirects, is case-insensitive, and counts clicks", async () => {
+  it("redirects and is case-insensitive", async () => {
     expect((await create("Docs", "https://docs.test/home")).status).toBe(201);
     const res = await call("/DOCS");
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe("https://docs.test/home");
     await call("/docs/sub?x=1").then((r) => expect(r.headers.get("location")).toBe("https://docs.test/home/sub?x=1"));
-    const link = await (await call("/_/api/links/docs")).json<{ clicks: number }>();
-    expect(link.clicks).toBe(2);
   });
 
   it("sends unknown names to the create form", async () => {

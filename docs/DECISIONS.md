@@ -248,8 +248,7 @@ it access to the server's origin.
 
 ## D10. Count clicks in D1, off the request path
 
-**Date:** 2026-11-17 · **Status:** accepted. Each click is also logged as an event (D17); the D1
-count remains what the UI shows.
+**Date:** 2026-11-17 · **Status:** superseded by D18. Clicks are no longer counted in D1.
 
 **Decision.** Each redirect increments `clicks` and sets `last_clicked_at` inside
 `ctx.waitUntil`, after the response is sent.
@@ -446,7 +445,7 @@ and how deeply can a metrics platform be integrated back into Cairn.
 4. `METRICS_DASHBOARD_URL` is a URL template; `{slug}` is replaced with the link name. When
    set, the usage count in the UI becomes a link to that dashboard, and the API returns it as
    `metrics_url` on every link.
-5. The D1 counter stays. It is what the UI shows without any metrics platform, and it is what
+5. (Later removed by D18.) The D1 counter stays. It is what the UI shows without any metrics platform, and it is what
    makes cumulative reporting possible.
 
 **Why these choices.**
@@ -500,7 +499,7 @@ and how deeply can a metrics platform be integrated back into Cairn.
 `link.passthrough`, `client.kind`, `client.country`). The Worker no longer sends OTLP metrics.
 Cloudflare's built-in OpenTelemetry *logs* export forwards the lines to the platform named in
 `observability.logs.destinations`, and the platform derives counts from them.
-`METRICS_DASHBOARD_URL` and the D1 counter are unchanged.
+`METRICS_DASHBOARD_URL` and the D1 counter are unchanged. (D18 later removed the D1 counter.)
 
 **Why events instead of a metric.**
 
@@ -546,6 +545,43 @@ Cloudflare's built-in OpenTelemetry *logs* export forwards the lines to the plat
 and logs the event and holds `metricsUrl`. `recordClick` is back to a plain D1 update. The
 `OTEL_*` settings were removed from `wrangler.jsonc`, and an `observability.logs` block was
 added.
+
+---
+
+## D18. Stop counting clicks in D1; usage lives in the metrics platform
+
+**Date:** 2026-11-17 · **Status:** accepted · **Supersedes:** D10 · **Amends:** D17
+
+**Decision.** Redirects no longer write to D1. The `cairn.link.click` log event (D17) is the
+only record of a visit. Migration `0003` drops the `clicks` and `last_clicked_at` columns. The
+API no longer returns them, and the UI's usage column is replaced by a **Metrics ↗** link in
+each row's actions. It only appears when `METRICS_DASHBOARD_URL` is set.
+
+**Why.** Keeping both meant counting every click twice, in two places that would drift apart.
+Cairn's own counter only fed a number in its UI. The product owner chose to give that up and
+look at usage in the metrics platform instead. In return:
+
+- *The redirect path is read-only.* A warm redirect touches memory or KV and nothing else. D1 is
+  only read on a cache miss, and only written when someone edits a link.
+- *No click-driven D1 ceiling.* D10's limit of about 100k redirects a day on D1's free tier is
+  gone. The remaining per-click cost is a log line.
+- *Less code.* `recordClick` and its `waitUntil` are removed.
+
+**Trade-offs.**
+
+- *No usage numbers inside Cairn.* People cannot sort or spot dead links in the Cairn UI. They
+  follow the Metrics link instead.
+- *Without a metrics platform there are no usage numbers anywhere* except Workers Logs in the
+  Cloudflare dashboard, and only for as long as Cloudflare retains logs.
+- *The migration deletes data.* On a deployment that already collected counts, applying `0003`
+  removes them. The README warns about this. The project had not been deployed when this was
+  decided.
+
+**Future.** Bring usage back into Cairn through a provider-agnostic query API. Candidates to
+evaluate then: a Prometheus-compatible query endpoint (PromQL over HTTP, which Grafana Cloud,
+Datadog, New Relic, Dynatrace and most self-hosted stacks expose in some form), or Cloudflare's
+own Workers Logs query API, which would need no third party. The returned numbers should be
+cached, not stored as a second source of truth. Neither has been checked yet.
 
 ---
 

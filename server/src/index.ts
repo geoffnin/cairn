@@ -2,7 +2,7 @@ import { handleApi } from "./api";
 import { AuthError, authenticate, handleCallback, handleLogin, handleLogout, mode } from "./auth";
 import { clickEvent, logClick } from "./events";
 import { handleExtensionConnect, handleExtensionDone, handleExtensionToken } from "./extauth";
-import { lookupTarget, recordClick, resolveTarget } from "./links";
+import { lookupTarget, resolveTarget } from "./links";
 import type { Env } from "./types";
 import { renderUi } from "./ui";
 import { json, linkPrefix, redirect } from "./util";
@@ -56,8 +56,8 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
     return redirect(`/_/?new=${encodeURIComponent(slug)}`);
   }
   const destination = resolveTarget(target, rest, url.search);
+  // Usage is counted from this event in your metrics platform, not in D1 (decision D18).
   logClick(clickEvent(req, slug, true, destination, rest !== ""));
-  recordClick(env, ctx, slug);
   return redirect(destination);
 }
 

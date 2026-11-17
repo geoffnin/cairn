@@ -119,7 +119,7 @@ Logs straight away. To get them into your own platform:
    (its OTLP logs endpoint and auth header) and give it a name.
 2. Put that name in `observability.logs.destinations` in `wrangler.jsonc` and redeploy.
 3. In your platform, count events where `event.name = cairn.link.click`, grouped by `link.slug`.
-4. Optionally set `METRICS_DASHBOARD_URL` so the usage count beside each link opens your
+4. Set `METRICS_DASHBOARD_URL` so each link in the Cairn UI gets a **Metrics ↗** link to your
    dashboard. `{slug}` is replaced with the link name, for example
    `https://your-stack.grafana.net/d/abc/cairn?var-slug={slug}`.
 
@@ -203,9 +203,13 @@ All routes need a signed-in session. Writes need the header `X-Cairn-Request: 1`
   until the sign-in expires. Web sessions last 24 hours and cannot be revoked one by one.
 - **The website's "Sign out" does not sign the extension out.** Use Sign out in the extension's
   settings.
-- **Free-tier ceilings.** Click counting writes to D1 once per redirect (100k writes/day free),
-  and KV allows 1,000 writes/day free, which bounds link edits plus first-time cache fills. The
-  $5/month Workers plan lifts both well past company scale.
+- **Cairn does not count clicks itself.** Usage lives only in your metrics platform, reached
+  through the Metrics link. Without a log destination, the events are still searchable in
+  Workers Logs in the Cloudflare dashboard. Redirects write nothing to D1.
+- **Upgrading from an earlier version?** Migration `0003` deletes the old `clicks` and
+  `last_clicked_at` columns and the counts in them. Export them first if you want them.
+- **Free-tier ceilings.** KV allows 1,000 writes a day free, which bounds link edits plus
+  first-time cache fills. The $5/month Workers plan lifts that well past company scale.
 - **Check how your platform receives the event's fields.** Cloudflare forwards each event as an
   OpenTelemetry log record. Whether the fields arrive as separate attributes or as a JSON body
   your platform must parse was not confirmed against a live destination. Send one click and

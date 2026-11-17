@@ -60,11 +60,13 @@ describe("click events", () => {
     expect(events()).toEqual([]);
   });
 
-  it("still counts clicks in D1 for the UI", async () => {
+  it("is the only record of a visit: redirects write nothing to D1", async () => {
     await create("n", "https://n.test/");
+    const before = await env.DB.prepare("SELECT * FROM links WHERE slug = 'n'").first();
     await call("/n");
     await call("/n");
-    expect((await (await call("/_/api/links/n")).json<{ clicks: number }>()).clicks).toBe(2);
+    expect(await env.DB.prepare("SELECT * FROM links WHERE slug = 'n'").first()).toEqual(before);
+    expect(before).not.toHaveProperty("clicks");
   });
 });
 

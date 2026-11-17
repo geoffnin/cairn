@@ -48,6 +48,4 @@ export interface Link {
   owner: string;
   created_at: number;
   updated_at: number;
-  clicks: number;
-  last_clicked_at: number | null;
 }

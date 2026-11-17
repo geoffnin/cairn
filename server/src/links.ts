@@ -109,16 +109,6 @@ export async function lookupTarget(env: Env, ctx: ExecutionContext, slug: string
   return url;
 }
 
-/** Keeps the usage count shown in the UI. Runs after the response has gone out. */
-export function recordClick(env: Env, ctx: ExecutionContext, slug: string): void {
-  ctx.waitUntil(
-    env.DB.prepare("UPDATE links SET clicks = clicks + 1, last_clicked_at = ? WHERE slug = ?")
-      .bind(nowSeconds(), slug)
-      .run()
-      .catch((e) => console.warn("click count failed", slug, e)),
-  );
-}
-
 // ---- CRUD ----
 
 export function getLink(env: Env, slug: string): Promise<Link | null> {
