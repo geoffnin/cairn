@@ -645,7 +645,8 @@ change. An in-app edit history remains under "Deferred".
 
 ## D20. Cloudflare all the way: Access is the only sign-in
 
-**Date:** 2026-11-17 · **Status:** accepted · **Supersedes:** D4, D5, D15
+**Date:** 2026-11-17 · **Status:** accepted; Access on the Worker (`ctx.access`) is now preferred,
+with this JWT check as the fallback (D26) · **Supersedes:** D4, D5, D15
 
 **Context.** Cairn had two production sign-in modes: its own OIDC flow (with signed session
 cookies, and a token the extension obtained once) and Cloudflare Access. The project has
@@ -871,6 +872,39 @@ extension ID straight to its settings in the JSON layout. A local test was incon
 headless Chromium here did not load extension policies in either shape. The README now shows
 the Admin console, Windows and Linux forms separately and asks admins to confirm with
 `chrome://policy`.
+
+---
+
+## D26. Install with the Deploy to Cloudflare button
+
+**Date:** 2026-11-17 · **Status:** accepted · **Amends:** D20
+
+**Decision.** The README has a Deploy to Cloudflare button pointing at `server/`. To make the
+result work with no configuration editing:
+
+- *No resource IDs in `wrangler.jsonc`.* Wrangler creates the D1 database and KV namespace on
+  the first deploy, named after the Worker, and reuses the bound ones on later deploys.
+  Existing installs keep their resources for the same reason. Migration commands find the
+  database by its binding name (`DB`).
+- *Migrations in the deploy script.* `npm run deploy` (which the button runs) applies
+  migrations before deploying when the database exists, so new code never meets an old schema.
+  On a first install, where the database only appears during the deploy, it deploys and then
+  migrates. The few seconds before the first migration see errors; nobody can sign in yet then.
+- *Access on the Worker, read from `ctx.access`.* Since August 2026 Access can be turned on for
+  a Worker directly. The runtime then provides `ctx.access.getIdentity()`, groups included, so
+  Cairn needs no team domain or AUD tag, and `ADMIN_GROUPS` works without custom claims.
+  Identities are cached per Access token for 60 seconds per isolate. The D20 path, verifying
+  the JWT from a separate Access application, stays as a fallback when `ACCESS_TEAM_DOMAIN`
+  and `ACCESS_AUD` are set. With neither, every request is refused with instructions.
+- *`workers_dev` back on.* A button install has no custom domain, so `workers.dev` is its first
+  address. Access on the Worker covers it, and Cairn refuses unsigned requests regardless.
+  Preview URLs stay off; reports suggest Access does not provide `ctx.access` there.
+
+**Not verified.** This environment has no Cloudflare account. Resource creation and lookup by
+name were read from Wrangler's source, the deploy script was run against a stand-in for
+Wrangler, and `ctx.access` was simulated in tests from its published types. The first real
+button install should confirm: resources created, migrations applied, `ctx.access` present on
+`workers.dev` and on a custom domain, and group names as `getIdentity()` reports them.
 
 ---
 

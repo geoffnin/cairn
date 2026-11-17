@@ -43,6 +43,19 @@ export interface CallOpts {
   origin?: string;
   /** Leave the key cache as the test set it. */
   keepKeys?: boolean;
+  /**
+   * Simulate Access turned on for the Worker: ctx.access is present and getIdentity() returns
+   * this (undefined = Access gave no identity). Leave out to use the Access JWT header instead.
+   */
+  workerAccess?: CloudflareAccessIdentity | undefined;
+}
+
+export function fakeCtx(opts: Pick<CallOpts, "workerAccess">): ExecutionContext {
+  const ctx = { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext & { access?: CloudflareAccessContext };
+  if ("workerAccess" in opts) {
+    ctx.access = { aud: "worker-aud", getIdentity: async () => opts.workerAccess };
+  }
+  return ctx;
 }
 
 export async function call(path: string, opts: CallOpts = {}): Promise<Response> {
@@ -58,5 +71,5 @@ export async function call(path: string, opts: CallOpts = {}): Promise<Response>
     body: opts.rawBody ?? (opts.body === undefined ? undefined : JSON.stringify(opts.body)),
     redirect: "manual",
   });
-  return worker.fetch(req as never, { ...env, ...opts.env });
+  return worker.fetch(req as never, { ...env, ...opts.env }, fakeCtx(opts));
 }

@@ -7,7 +7,7 @@ import { renderUi } from "./ui";
 import { json, redirect } from "./util";
 
 // Everything that is not a go link lives under /_/ ("_" can never start a link name).
-async function route(req: Request, env: Env): Promise<Response> {
+async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname;
 
@@ -16,7 +16,7 @@ async function route(req: Request, env: Env): Promise<Response> {
   if (path === "/favicon.ico") return new Response(null, { status: 204 });
   if (path === "/_/auth/logout") return handleLogout(req, env);
 
-  const user = await authenticate(req, env);
+  const user = await authenticate(req, env, ctx);
   if (path.startsWith("/_/api/")) return handleApi(req, env, user, path.slice("/_/api".length));
   if (path === "/" || path === "/_") return redirect("/_/");
   if (path === "/_/") return renderUi();
@@ -46,9 +46,9 @@ async function route(req: Request, env: Env): Promise<Response> {
 }
 
 export default {
-  async fetch(req, env): Promise<Response> {
+  async fetch(req, env, ctx): Promise<Response> {
     try {
-      return await route(req, env);
+      return await route(req, env, ctx);
     } catch (e) {
       if (e instanceof AuthError) {
         if (new URL(req.url).pathname.startsWith("/_/api/")) return json({ error: e.message }, e.status);
