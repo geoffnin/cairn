@@ -13,6 +13,7 @@ import {
 } from "./links";
 import type { Env, Link, User } from "./types";
 import { linkCreated, linkDeleted, linkUpdated, logEvent, metricsUrl } from "./events";
+import { userIdFor } from "./users";
 import { json } from "./util";
 
 const canEdit = (user: User, link: Link) => user.isAdmin || link.owner === user.email;
@@ -66,7 +67,7 @@ export async function handleApi(req: Request, env: Env, user: User, path: string
         const p = new URL(req.url).searchParams;
         const links = await listLinks(env, {
           q: p.get("q")?.trim() || undefined,
-          owner: p.get("owner") === "me" ? user.email : undefined,
+          ownerId: p.get("owner") === "me" ? await userIdFor(env, user.email) : undefined,
           limit: p.get("limit") ? Number(p.get("limit")) : undefined,
         });
         return json({ links: links.map((l) => present(env, user, l)) });
@@ -74,14 +75,12 @@ export async function handleApi(req: Request, env: Env, user: User, path: string
       if (req.method === "POST") {
         const b = await body(req);
         const slug = normalizeSlug(b.slug);
-        const link = await createLink(env, {
-          slug,
-          url: validateUrl(b.url),
-          description: validateDescription(b.description),
-          owner: user.email,
-        });
+        const url = validateUrl(b.url);
+        const description = validateDescription(b.description);
+        const actorId = await userIdFor(env, user.email);
+        const link = await createLink(env, { slug, url, description, owner_id: actorId });
         if (!link) return json({ error: `go/${slug} already exists.` }, 409);
-        logEvent(linkCreated(req, user.email, slug, link));
+        logEvent(linkCreated(req, actorId, slug, link));
         return json(present(env, user, link), 201);
       }
     }
@@ -102,20 +101,20 @@ export async function handleApi(req: Request, env: Env, user: User, path: string
       if (req.method === "PUT") {
         const b = await body(req);
         if (b.rev !== undefined && b.rev !== link.rev) return stale();
-        const updated = await updateLink(env, slug, link.rev, {
-          url: b.url === undefined ? link.url : validateUrl(b.url),
-          description: b.description === undefined ? link.description : validateDescription(b.description),
-          owner: b.owner === undefined ? link.owner : validateOwner(b.owner),
-        });
+        const url = b.url === undefined ? link.url : validateUrl(b.url);
+        const description = b.description === undefined ? link.description : validateDescription(b.description);
+        // Handing a link to someone who has never signed in gives them an ID now.
+        const ownerId = b.owner === undefined ? link.owner_id : await userIdFor(env, validateOwner(b.owner));
+        const updated = await updateLink(env, slug, link.rev, { url, description, owner_id: ownerId });
         if (!updated) return stale();
-        logEvent(linkUpdated(req, user.email, slug, link, updated));
+        logEvent(linkUpdated(req, await userIdFor(env, user.email), slug, link, updated));
         return json(present(env, user, updated));
       }
       if (req.method === "DELETE") {
         const expected = new URL(req.url).searchParams.get("rev");
         if (expected !== null && expected !== link.rev) return stale();
         if (!(await deleteLink(env, slug, link.rev))) return stale();
-        logEvent(linkDeleted(req, user.email, slug, link));
+        logEvent(linkDeleted(req, await userIdFor(env, user.email), slug, link));
         return json({ ok: true });
       }
     }

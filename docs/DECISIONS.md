@@ -610,7 +610,8 @@ cached, not stored as a second source of truth. Neither has been checked yet.
 
 ## D19. Separate events for creating, updating and deleting links
 
-**Date:** 2026-11-17 · **Status:** accepted · **Extends:** D17
+**Date:** 2026-11-17 · **Status:** accepted; emails in these events replaced by user IDs (D27)
+· **Extends:** D17
 
 **Decision.** Alongside `cairn.link.click`, the API logs `cairn.link.create`,
 `cairn.link.update` and `cairn.link.delete`, in the same flat dotted-key style and through the
@@ -696,7 +697,8 @@ prompt if the provider's own session is still alive.
   history (D4, D5, D15).
 
 **On user IDs** (open from the discussion of D19): in this setup the stable ID available is
-Access's own `sub` for the person, not the identity provider's. Events still carry emails.
+Access's own `sub` for the person, not the identity provider's. Resolved by D27, which uses
+Cairn's own random IDs instead.
 
 ---
 
@@ -905,6 +907,49 @@ name were read from Wrangler's source, the deploy script was run against a stand
 Wrangler, and `ctx.access` was simulated in tests from its published types. The first real
 button install should confirm: resources created, migrations applied, `ctx.access` present on
 `workers.dev` and on a custom domain, and group names as `getIdentity()` reports them.
+
+---
+
+## D27. People are random IDs; emails live only in a `users` table
+
+**Date:** 2026-11-17 · **Status:** accepted · **Amends:** D19
+
+**Decision.** A new `users` table maps a random ID (128 bits, hex) to an email. Events carry
+`user.id`, `link.owner_id` and `link.previous_owner_id` instead of emails, and links store the
+owner's ID (`links.owner_id`) instead of the email. The API and UI still show owners' emails,
+joined in from `users`. Migration `0006` creates the table from the existing owners and
+converts the links. Click events are unchanged: they never identified anyone.
+
+**Why random IDs.**
+
+- *Not a hash of the email.* A plain hash can be reversed by hashing a list of likely emails
+  (the company directory). A keyed hash avoids that but adds a secret to manage, and anyone who
+  ever holds the key can reverse every log line.
+- *Not Access's user ID.* Links can be handed to any email, including people who have never
+  signed in, and Access has no ID for them. Its `sub` also differs between the two Access
+  setups Cairn supports (D26).
+- *A random ID means nothing outside Cairn.* Logs can go to a third-party platform without
+  disclosing who did what. Reading them needs access to Cairn's D1 database.
+- *It allows forgetting someone.* Deleting a person's `users` row leaves every log line about
+  them pointing at an ID that no longer resolves.
+
+**Why links store the ID too.** The request was IDs in events plus a lookup table for the UI.
+Storing IDs in `links` as well means an email exists in exactly one row, so changing or
+removing it is one update, and the database itself holds no email outside `users`.
+
+**Details.**
+
+- *IDs are created on first need:* creating a link, being handed one, or listing "only mine".
+  Redirects and reads never touch `users`, so the redirect path is unchanged.
+- *One statement* (`INSERT … ON CONFLICT (email) DO UPDATE … RETURNING id`) both creates and
+  looks up an ID, so two requests for a new email at once get the same ID.
+- *Not cached.* Lookups happen only on link changes and "only mine" listings; a cache could
+  hand out the ID of a row that has since been removed.
+- *Emails are compared lowercase,* as before.
+
+**Not built.** A way to delete or rename a user (for example on offboarding or a changed
+email), and showing IDs in the UI. Deleting a row today would leave that person's links with
+no visible owner, so it needs a decision on who inherits them first.
 
 ---
 

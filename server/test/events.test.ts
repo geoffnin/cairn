@@ -85,23 +85,36 @@ describe("dashboard link", () => {
 describe("link lifecycle events", () => {
   const named = (name: string) => logged.map((a) => a[0] as Record<string, unknown>).filter((e) => e?.["event.name"] === name);
   const put = (slug: string, body: unknown, as?: string) => call(`/_/api/links/${slug}`, { method: "PUT", body, as });
+  const idOf = async (email: string) =>
+    (await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(email).first<{ id: string }>())?.id;
 
-  it("logs a create event with who created it", async () => {
+  it("identifies people by opaque ID, never by email", async () => {
     await call("/_/api/links", { method: "POST", body: { slug: "Wiki", url: "https://wiki.test/{*}?private=1", description: "Team wiki" } });
+    const alice = await idOf("alice@example.com");
+    expect(alice).toMatch(/^[0-9a-f]{32}$/);
     expect(named("cairn.link.create")).toEqual([
       {
         "event.name": "cairn.link.create",
         "link.slug": "wiki",
-        "link.owner": "alice@example.com",
+        "link.owner_id": alice,
         "link.target_host": "wiki.test",
         "link.has_description": true,
         "link.has_placeholder": true,
-        "user.email": "alice@example.com",
+        "user.id": alice,
         "user.admin_override": false,
         "client.kind": "browser",
       },
     ]);
     expect(JSON.stringify(logged)).not.toContain("private=1");
+  });
+
+  it("never logs an email address in any event", async () => {
+    await create("pii", "https://a.test/");
+    await put("pii", { owner: "bob@example.com", url: "https://b.test/" });
+    await call("/_/api/links/pii", { method: "DELETE", as: "admin@example.com" });
+    await call("/pii");
+    expect(logged.length).toBeGreaterThan(2);
+    expect(JSON.stringify(logged)).not.toMatch(/@/);
   });
 
   it("does not log a create that failed", async () => {
@@ -114,18 +127,21 @@ describe("link lifecycle events", () => {
   it("logs which fields an update changed, with previous host and owner", async () => {
     await create("doc", "https://old.test/a");
     await put("doc", { url: "https://new.test/b", owner: "bob@example.com" });
+    const [alice, bob] = [await idOf("alice@example.com"), await idOf("bob@example.com")];
+    expect(bob).toMatch(/^[0-9a-f]{32}$/);
+    expect(bob).not.toBe(alice);
     expect(named("cairn.link.update")).toEqual([
       {
         "event.name": "cairn.link.update",
         "link.slug": "doc",
-        "link.owner": "bob@example.com",
+        "link.owner_id": bob,
         "link.target_host": "new.test",
         "link.has_description": false,
         "link.has_placeholder": false,
         "link.changed": "owner,url",
         "link.previous_target_host": "old.test",
-        "link.previous_owner": "alice@example.com",
-        "user.email": "alice@example.com",
+        "link.previous_owner_id": alice,
+        "user.id": alice,
         "user.admin_override": false,
         "client.kind": "browser",
       },
@@ -134,27 +150,63 @@ describe("link lifecycle events", () => {
 
   it("skips no-op saves and refused updates, and flags admin changes", async () => {
     await create("same", "https://s.test/");
-    await put("same", { url: "https://s.test/", description: "" });
+    await put("same", { url: "https://s.test/", description: "", owner: "Alice@Example.com" });
     await put("same", { url: "https://x.test/" }, "bob@example.com"); // 403
     expect(named("cairn.link.update")).toEqual([]);
 
     await put("same", { description: "now described" }, "admin@example.com");
     expect(named("cairn.link.update")).toMatchObject([
-      { "link.changed": "description", "user.email": "admin@example.com", "user.admin_override": true, "link.owner": "alice@example.com" },
+      {
+        "link.changed": "description",
+        "user.id": await idOf("admin@example.com"),
+        "user.admin_override": true,
+        "link.owner_id": await idOf("alice@example.com"),
+      },
     ]);
-    expect(named("cairn.link.update")[0]).not.toHaveProperty("link.previous_owner");
+    expect(named("cairn.link.update")[0]).not.toHaveProperty("link.previous_owner_id");
   });
 
   it("logs deletes with the owner the link had", async () => {
     await create("gone", "https://g.test/");
     await call("/_/api/links/gone", { method: "DELETE", as: "admin@example.com" });
     expect(named("cairn.link.delete")).toMatchObject([
-      { "link.slug": "gone", "link.owner": "alice@example.com", "user.email": "admin@example.com", "user.admin_override": true },
+      { "link.slug": "gone", "link.owner_id": await idOf("alice@example.com"), "user.id": await idOf("admin@example.com"), "user.admin_override": true },
     ]);
   });
 
   it("marks changes made from the extension's popup", async () => {
     await call("/_/api/links", { method: "POST", body: { slug: "ext", url: "https://e.test/" }, headers: { origin: "chrome-extension://abcdef" } });
     expect(named("cairn.link.create")[0]).toMatchObject({ "client.kind": "extension" });
+  });
+});
+
+describe("users table", () => {
+  it("shows emails in the API, from the users table", async () => {
+    await create("mine", "https://m.test/");
+    const link = await (await call("/_/api/links/mine")).json<Record<string, unknown>>();
+    expect(link.owner).toBe("alice@example.com");
+    expect(link.owner_id).toMatch(/^[0-9a-f]{32}$/);
+    const row = await env.DB.prepare("SELECT * FROM links WHERE slug = 'mine'").first<Record<string, unknown>>();
+    expect(row).not.toHaveProperty("owner");
+    expect(JSON.stringify(row)).not.toMatch(/@/);
+  });
+
+  it("gives each email one ID, case-insensitively, and keeps it", async () => {
+    const { userIdFor } = await import("../src/users");
+    const a = await userIdFor(env, "Carol@Example.com");
+    expect(await userIdFor(env, "carol@example.com")).toBe(a);
+    expect(await userIdFor(env, "dave@example.com")).not.toBe(a);
+  });
+
+  it("still filters 'only mine' and transfers ownership by email", async () => {
+    await create("a1", "https://a.test/");
+    await call("/_/api/links", { method: "POST", body: { slug: "b1", url: "https://b.test/" }, as: "bob@example.com" });
+    const mine = async (as: string) =>
+      (await (await call("/_/api/links?owner=me", { as })).json<{ links: { slug: string }[] }>()).links.map((l) => l.slug);
+    expect(await mine("alice@example.com")).toEqual(["a1"]);
+    expect(await mine("nobody@example.com")).toEqual([]);
+    await call("/_/api/links/a1", { method: "PUT", body: { owner: "Bob@Example.com" } });
+    expect(await mine("bob@example.com")).toEqual(["a1", "b1"]);
+    expect((await (await call("/_/api/links/a1")).json<{ owner: string }>()).owner).toBe("bob@example.com");
   });
 });
