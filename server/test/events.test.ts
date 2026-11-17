@@ -20,6 +20,7 @@ const create = (slug: string, url: string) => call("/_/api/links", { method: "PO
 describe("click events", () => {
   it("logs one structured object per visit, as a single argument", async () => {
     await create("docs", "https://docs.test/home?secret=1");
+    logged = [];
     await call("/Docs");
     expect(logged.filter((a) => a.length === 1 && typeof a[0] === "object")).toHaveLength(1);
     expect(events()).toEqual([
@@ -79,5 +80,85 @@ describe("dashboard link", () => {
     expect((await (await call("/_/api/links/a.b")).json<{ metrics_url: string | null }>()).metrics_url).toBeNull();
     expect(metricsUrl({ METRICS_DASHBOARD_URL: "https://dash.test/all" }, "x")).toBe("https://dash.test/all");
     expect(metricsUrl({ METRICS_DASHBOARD_URL: "javascript:alert(1)//{slug}" }, "x")).toBeNull();
+  });
+});
+
+describe("link lifecycle events", () => {
+  const named = (name: string) => logged.map((a) => a[0] as Record<string, unknown>).filter((e) => e?.["event.name"] === name);
+  const put = (slug: string, body: unknown, as?: string) => call(`/_/api/links/${slug}`, { method: "PUT", body, as });
+
+  it("logs a create event with who created it", async () => {
+    await call("/_/api/links", { method: "POST", body: { slug: "Wiki", url: "https://wiki.test/{*}?private=1", description: "Team wiki" } });
+    expect(named("cairn.link.create")).toEqual([
+      {
+        "event.name": "cairn.link.create",
+        "link.slug": "wiki",
+        "link.owner": "alice@example.com",
+        "link.target_host": "wiki.test",
+        "link.has_description": true,
+        "link.has_placeholder": true,
+        "user.email": "alice@example.com",
+        "user.admin_override": false,
+        "client.kind": "browser",
+      },
+    ]);
+    expect(JSON.stringify(logged)).not.toContain("private=1");
+  });
+
+  it("does not log a create that failed", async () => {
+    await create("dup", "https://a.test/");
+    await call("/_/api/links", { method: "POST", body: { slug: "dup", url: "https://b.test/" }, as: "bob@example.com" });
+    await call("/_/api/links", { method: "POST", body: { slug: "bad name", url: "https://b.test/" } });
+    expect(named("cairn.link.create")).toHaveLength(1);
+  });
+
+  it("logs which fields an update changed, with previous host and owner", async () => {
+    await create("doc", "https://old.test/a");
+    await put("doc", { url: "https://new.test/b", owner: "bob@example.com" });
+    expect(named("cairn.link.update")).toEqual([
+      {
+        "event.name": "cairn.link.update",
+        "link.slug": "doc",
+        "link.owner": "bob@example.com",
+        "link.target_host": "new.test",
+        "link.has_description": false,
+        "link.has_placeholder": false,
+        "link.changed": "owner,url",
+        "link.previous_target_host": "old.test",
+        "link.previous_owner": "alice@example.com",
+        "user.email": "alice@example.com",
+        "user.admin_override": false,
+        "client.kind": "browser",
+      },
+    ]);
+  });
+
+  it("skips no-op saves and refused updates, and flags admin changes", async () => {
+    await create("same", "https://s.test/");
+    await put("same", { url: "https://s.test/", description: "" });
+    await put("same", { url: "https://x.test/" }, "bob@example.com"); // 403
+    expect(named("cairn.link.update")).toEqual([]);
+
+    await put("same", { description: "now described" }, "admin@example.com");
+    expect(named("cairn.link.update")).toMatchObject([
+      { "link.changed": "description", "user.email": "admin@example.com", "user.admin_override": true, "link.owner": "alice@example.com" },
+    ]);
+    expect(named("cairn.link.update")[0]).not.toHaveProperty("link.previous_owner");
+  });
+
+  it("logs deletes with the owner the link had", async () => {
+    await create("gone", "https://g.test/");
+    await call("/_/api/links/gone", { method: "DELETE", as: "admin@example.com" });
+    expect(named("cairn.link.delete")).toMatchObject([
+      { "link.slug": "gone", "link.owner": "alice@example.com", "user.email": "admin@example.com", "user.admin_override": true },
+    ]);
+  });
+
+  it("marks changes made from the extension", async () => {
+    await env.DB.exec("DELETE FROM extension_tokens");
+    const { createToken } = await import("../src/tokens");
+    const { token } = await createToken(env, { email: "alice@example.com", name: "A", groupAdmin: false });
+    await call("/_/api/links", { method: "POST", body: { slug: "ext", url: "https://e.test/" }, as: null, headers: { authorization: `Bearer ${token}` } });
+    expect(named("cairn.link.create")[0]).toMatchObject({ "client.kind": "extension" });
   });
 });

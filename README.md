@@ -112,6 +112,31 @@ Every visit to a link writes one structured log line, the event `cairn.link.clic
 `link.found: false` means someone tried a name that does not exist yet, which tells you what
 links people expect. The event never contains the full destination URL or who clicked.
 
+Changes to links write their own events: `cairn.link.create`, `cairn.link.update` and
+`cairn.link.delete`. Each records the link, its owner, the destination's host, **who made the
+change** (`user.email`) and whether an admin changed someone else's link
+(`user.admin_override`). Updates also say which fields changed and what the previous host or
+owner was:
+
+```json
+{
+  "event.name": "cairn.link.update",
+  "link.slug": "roadmap",
+  "link.owner": "bob@example.com",
+  "link.target_host": "new-docs.example.com",
+  "link.has_description": true,
+  "link.has_placeholder": false,
+  "link.changed": "owner,url",
+  "link.previous_target_host": "docs.example.com",
+  "link.previous_owner": "alice@example.com",
+  "user.email": "alice@example.com",
+  "user.admin_override": false,
+  "client.kind": "browser"
+}
+```
+
+Saves that change nothing, and changes that are refused, are not logged.
+
 Cloudflare collects these lines for you. They are searchable in the dashboard under Workers
 Logs straight away. To get them into your own platform:
 

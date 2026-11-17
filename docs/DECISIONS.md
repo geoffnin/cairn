@@ -585,6 +585,41 @@ cached, not stored as a second source of truth. Neither has been checked yet.
 
 ---
 
+## D19. Separate events for creating, updating and deleting links
+
+**Date:** 2026-11-17 · **Status:** accepted · **Extends:** D17
+
+**Decision.** Alongside `cairn.link.click`, the API logs `cairn.link.create`,
+`cairn.link.update` and `cairn.link.delete`, in the same flat dotted-key style and through the
+same Cloudflare log export. Each carries `link.slug`, `link.owner`, `link.target_host`,
+`link.has_description`, `link.has_placeholder`, `user.email`, `user.admin_override` and
+`client.kind`. Updates add `link.changed` (comma-separated field names) and, when relevant,
+`link.previous_target_host` and `link.previous_owner`.
+
+**Why separate event names** rather than one `cairn.link.change` with an action field: each is
+a different question ("how many links were created this month", "who keeps editing go/wiki"),
+and a distinct `event.name` is the one field every platform can filter on cheaply.
+
+**Choices.**
+
+- *Who acted is recorded*, unlike for clicks (D17). Clicks say what someone was reading;
+  changes to a shared namespace are actions on everyone's links, and an audit trail is the
+  point. Link owners' emails are already visible to everyone signed in to Cairn. Remove
+  `user.email` in `src/events.ts` if your policy says otherwise.
+- *Destinations are reduced to their host*, as for clicks. A full URL can carry document IDs
+  or tokens. The trade-off: the log shows that `go/wiki` moved from `old.test` to `new.test`,
+  but not which page.
+- *Only real changes are logged.* A save that changes nothing, a refused change (wrong owner,
+  name taken, invalid input) and a failed write produce no event.
+- *Delete is included* though only create and update were asked for: it completes the lifecycle
+  and costs one line.
+- *`link.changed` is a string, not an array*, so it is a plain attribute on every platform.
+
+**Not done.** These events are a log, not a restorable history: they cannot be used to undo a
+change. An in-app edit history remains under "Deferred".
+
+---
+
 ## Deferred
 
 Not built, on purpose, until someone needs them:

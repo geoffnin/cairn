@@ -1,4 +1,4 @@
-// Click events: one structured log line per go-link visit.
+// Structured events: one log line per go-link visit, and one per change to a link.
 //
 // Cloudflare captures console.log output from the Worker, keeps it in Workers Logs (queryable
 // in the dashboard), and can forward it to any OpenTelemetry logs endpoint. Configure that with
@@ -10,6 +10,25 @@
 // the platform maps the object (attributes, or a JSON body it parses).
 
 export const CLICK_EVENT = "cairn.link.click";
+export const CREATE_EVENT = "cairn.link.create";
+export const UPDATE_EVENT = "cairn.link.update";
+export const DELETE_EVENT = "cairn.link.delete";
+
+const clientKind = (req: Request): "extension" | "browser" =>
+  /^Bearer\s/i.test(req.headers.get("authorization") ?? "") ? "extension" : "browser";
+
+function hostOf(url: string): string | undefined {
+  try {
+    return new URL(url.replaceAll("{*}", "x")).host;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Drops undefined fields so every logged key has a value. */
+function compact<T extends object>(o: T): T {
+  return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T;
+}
 
 export interface ClickEvent {
   "event.name": typeof CLICK_EVENT;
@@ -39,23 +58,99 @@ export function clickEvent(
     "link.slug": slug,
     "link.found": found,
     "link.passthrough": passthrough,
-    "client.kind": /^Bearer\s/i.test(req.headers.get("authorization") ?? "") ? "extension" : "browser",
+    "client.kind": clientKind(req),
   };
-  if (destination) {
-    try {
-      event["link.target_host"] = new URL(destination).host;
-    } catch {
-      /* leave it out */
-    }
-  }
+  const host = destination ? hostOf(destination) : undefined;
+  if (host) event["link.target_host"] = host;
   const country = (req as Request & { cf?: { country?: unknown } }).cf?.country;
   if (typeof country === "string") event["client.country"] = country;
   return event;
 }
 
-/** Emits the event. A single object argument, so Workers Logs indexes each field. */
-export function logClick(event: ClickEvent): void {
-  console.log(event);
+// ---- link lifecycle ----
+//
+// Unlike clicks, these record who acted (user.email): changes to shared links are worth an
+// audit trail, and every link's owner is already visible to everyone signed in to Cairn.
+// Destinations are still reduced to their host.
+
+interface LinkFields {
+  url: string;
+  description: string;
+  owner: string;
+}
+
+export interface LinkChangeEvent {
+  "event.name": typeof CREATE_EVENT | typeof UPDATE_EVENT | typeof DELETE_EVENT;
+  "link.slug": string;
+  /** Owner after the change (for delete: the owner it had). */
+  "link.owner": string;
+  "link.target_host"?: string;
+  "link.has_description": boolean;
+  /** Whether the destination contains the {*} pass-through placeholder. */
+  "link.has_placeholder": boolean;
+  /** Update only: comma-separated names of the fields that changed, e.g. "owner,url". */
+  "link.changed"?: string;
+  /** Update only, when the destination changed. */
+  "link.previous_target_host"?: string;
+  /** Update only, when ownership was handed over. */
+  "link.previous_owner"?: string;
+  /** Who made the change. */
+  "user.email": string;
+  /** True when an admin changed someone else's link. */
+  "user.admin_override": boolean;
+  "client.kind": "extension" | "browser";
+}
+
+function lifecycleEvent(
+  name: LinkChangeEvent["event.name"],
+  req: Request,
+  actor: string,
+  slug: string,
+  link: LinkFields,
+  ownerBefore: string,
+): LinkChangeEvent {
+  return compact({
+    "event.name": name,
+    "link.slug": slug,
+    "link.owner": link.owner,
+    "link.target_host": hostOf(link.url),
+    "link.has_description": link.description !== "",
+    "link.has_placeholder": link.url.includes("{*}"),
+    "user.email": actor,
+    "user.admin_override": actor !== ownerBefore,
+    "client.kind": clientKind(req),
+  });
+}
+
+export function linkCreated(req: Request, actor: string, slug: string, link: LinkFields): LinkChangeEvent {
+  return lifecycleEvent(CREATE_EVENT, req, actor, slug, link, link.owner);
+}
+
+/** Returns null when nothing actually changed, so no-op saves are not logged. */
+export function linkUpdated(
+  req: Request,
+  actor: string,
+  slug: string,
+  before: LinkFields,
+  after: LinkFields,
+): LinkChangeEvent | null {
+  const changed = (["description", "owner", "url"] as const).filter((k) => before[k] !== after[k]);
+  if (!changed.length) return null;
+  return compact({
+    ...lifecycleEvent(UPDATE_EVENT, req, actor, slug, after, before.owner),
+    "link.changed": changed.join(","),
+    "link.previous_target_host": before.url !== after.url ? hostOf(before.url) : undefined,
+    "link.previous_owner": before.owner !== after.owner ? before.owner : undefined,
+  });
+}
+
+export function linkDeleted(req: Request, actor: string, slug: string, link: LinkFields): LinkChangeEvent {
+  return lifecycleEvent(DELETE_EVENT, req, actor, slug, link, link.owner);
+}
+
+/** Emits an event. A single object argument, so Workers Logs indexes each field. */
+export function logEvent(event: ClickEvent | LinkChangeEvent | null): void {
+  if (event) console.log(event);
 }
 
 /** Where "see metrics" for a link should go, from METRICS_DASHBOARD_URL ("{slug}" is substituted). */

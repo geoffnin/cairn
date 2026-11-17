@@ -1,6 +1,6 @@
 import { handleApi } from "./api";
 import { AuthError, authenticate, handleCallback, handleLogin, handleLogout, mode } from "./auth";
-import { clickEvent, logClick } from "./events";
+import { clickEvent, logEvent } from "./events";
 import { handleExtensionConnect, handleExtensionDone, handleExtensionToken } from "./extauth";
 import { lookupTarget, resolveTarget } from "./links";
 import type { Env } from "./types";
@@ -52,12 +52,12 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
 
   const target = await lookupTarget(env, ctx, slug);
   if (target === null) {
-    logClick(clickEvent(req, slug, false, null, rest !== ""));
+    logEvent(clickEvent(req, slug, false, null, rest !== ""));
     return redirect(`/_/?new=${encodeURIComponent(slug)}`);
   }
   const destination = resolveTarget(target, rest, url.search);
   // Usage is counted from this event in your metrics platform, not in D1 (decision D18).
-  logClick(clickEvent(req, slug, true, destination, rest !== ""));
+  logEvent(clickEvent(req, slug, true, destination, rest !== ""));
   return redirect(destination);
 }
 

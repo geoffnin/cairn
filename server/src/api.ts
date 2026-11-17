@@ -11,7 +11,7 @@ import {
   validateUrl,
 } from "./links";
 import type { Env, Link, User } from "./types";
-import { metricsUrl } from "./events";
+import { linkCreated, linkDeleted, linkUpdated, logEvent, metricsUrl } from "./events";
 import { revokeToken, revokeTokensFor } from "./tokens";
 import { bearerToken, json, linkPrefix } from "./util";
 
@@ -95,6 +95,7 @@ export async function handleApi(req: Request, env: Env, user: User, path: string
           owner: user.email,
         });
         if (!link) return json({ error: `${prefix}/${slug} already exists.` }, 409);
+        logEvent(linkCreated(req, user.email, slug, link));
         return json(present(env, user, link), 201);
       }
     }
@@ -114,10 +115,12 @@ export async function handleApi(req: Request, env: Env, user: User, path: string
           description: b.description === undefined ? link.description : validateDescription(b.description),
           owner: b.owner === undefined ? link.owner : validateOwner(b.owner),
         });
+        logEvent(linkUpdated(req, user.email, slug, link, updated!));
         return json(present(env, user, updated!));
       }
       if (req.method === "DELETE") {
         await deleteLink(env, slug);
+        logEvent(linkDeleted(req, user.email, slug, link));
         return json({ ok: true });
       }
     }
