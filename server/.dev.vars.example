@@ -1,0 +1,4 @@
+# Copy to .dev.vars for `npm run dev`. Never commit .dev.vars.
+# Cloudflare Access is not available locally, so dev mode signs you in as a fixed user.
+AUTH_MODE=dev
+DEV_USER_EMAIL=dev@example.com

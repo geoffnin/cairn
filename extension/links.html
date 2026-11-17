@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Links in this browser</title>
+<link rel="stylesheet" href="ui.css">
+<style>
+  body { padding: 24px 16px 48px; }
+  main { max-width: 860px; margin: 0 auto; }
+  header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  header a { margin-left: auto; font-size: 13px; }
+  .new { display: grid; grid-template-columns: minmax(140px, 1fr) 2fr; gap: 0 12px; }
+  .new .wide { grid-column: 1 / -1; }
+  .scroll { overflow-x: auto; }
+  #q { margin-bottom: 8px; }
+  @media (max-width: 560px) { .new { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Links in this browser</h1>
+    <span class="hint">Local mode: stored only in this Chrome profile.</span>
+    <a href="options.html">Settings</a>
+  </header>
+
+  <section class="card">
+    <h2>New link</h2>
+    <form id="new" class="new">
+      <div>
+        <label for="n-slug">Name</label>
+        <div class="slug"><span>go/</span><input id="n-slug" type="text" required maxlength="64" autocomplete="off" spellcheck="false" placeholder="roadmap"></div>
+      </div>
+      <div>
+        <label for="n-url">Destination URL</label>
+        <input id="n-url" type="text" required maxlength="2048" autocomplete="off" spellcheck="false" placeholder="https://docs.example.com/roadmap">
+      </div>
+      <div class="wide">
+        <label for="n-desc">Description (optional)</label>
+        <input id="n-desc" type="text" maxlength="500" autocomplete="off">
+      </div>
+      <p class="hint wide">Use <code>{*}</code> to pass text through: <code>https://tracker.example.com/browse/{*}</code> makes <b>go/bug/ABC-12</b> open that ticket.</p>
+      <div class="row wide"><button type="submit">Create link</button></div>
+    </form>
+    <p class="msg" id="n-msg" role="status"></p>
+  </section>
+
+  <section class="card">
+    <input id="q" type="text" placeholder="Search names, URLs and descriptions" aria-label="Search links" autocomplete="off">
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Name</th><th>Destination</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <p class="msg" id="l-msg" role="status"></p>
+  </section>
+</main>
+
+<dialog id="edit">
+  <form id="e-form" method="dialog">
+    <h2 id="e-title"></h2>
+    <label for="e-url">Destination URL</label>
+    <input id="e-url" type="text" required maxlength="2048" spellcheck="false">
+    <label for="e-desc">Description</label>
+    <input id="e-desc" type="text" maxlength="500">
+    <p class="msg err" id="e-msg" role="alert"></p>
+    <div class="row"><button type="button" class="quiet" id="e-cancel">Cancel</button><button type="submit">Save</button></div>
+  </form>
+</dialog>
+<script type="module" src="links.js"></script>
+</body>
+</html>

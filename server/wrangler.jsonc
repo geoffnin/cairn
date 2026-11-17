@@ -1,0 +1,75 @@
+// Cairn go-links server. See ../README.md for setup.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cairn",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+
+  // Only serve on your own hostname, behind Cloudflare Access. The workers.dev and preview URLs
+  // would not be behind Access; Cairn would refuse those requests anyway, but there is no reason
+  // to expose them.
+  "workers_dev": false,
+  "preview_urls": false,
+  // Logs, including one "cairn.link.click" event per visit (see src/events.ts).
+  // To send them to Grafana, Datadog, Honeycomb, New Relic, Sentry or any OTLP logs endpoint,
+  // create a destination in the Cloudflare dashboard and list its name under "destinations".
+  // Keep head_sampling_rate at 1 so counts are exact.
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "invocation_logs": true, // Cloudflare's own per-request log line; false halves log volume
+      "persist": true,         // also keep them in Workers Logs, queryable in the dashboard
+      "destinations": []       // e.g. ["grafana-logs"]
+    }
+  },
+
+  // Put the Worker on your own hostname, e.g. go.example.com:
+  // "routes": [{ "pattern": "go.example.com", "custom_domain": true }],
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "cairn",
+      // Replace with the id printed by `wrangler d1 create cairn`.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "CACHE",
+      // Replace with the id printed by `wrangler kv namespace create CACHE`.
+      "id": "00000000000000000000000000000000"
+    }
+  ],
+
+  "vars": {
+    // Sign-in is done by Cloudflare Access (see README, "Put Cloudflare Access in front").
+    "AUTH_MODE": "access",        // "dev" for `wrangler dev` on localhost only
+    "ACCESS_TEAM_DOMAIN": "",     // e.g. your-team.cloudflareaccess.com
+    "ACCESS_AUD": "",             // the Access application's Application Audience (AUD) tag
+
+    // --- authorization ---
+    "ADMIN_EMAILS": "",           // comma separated; admins can edit/delete any link
+    // Comma separated group names. Only works if your Access identity provider passes a
+    // "groups" claim into the Access token (Zero Trust > Settings > Authentication > your IdP).
+    "ADMIN_GROUPS": "",
+    // Restrict to these email domains, e.g. "example.com,example.co.uk". Empty = whoever the
+    // Access policy lets in. Checked on every request, on top of the Access policy.
+    "ALLOWED_EMAIL_DOMAINS": "",
+
+
+    // How long each Worker instance reuses a redirect it has looked up, in seconds (0-3600).
+    // After an edit, other instances can send people to the old destination for up to this
+    // long, plus about a minute for KV to update everywhere. 0 turns this layer off.
+    "REDIRECT_CACHE_SECONDS": "30",
+
+    // --- link metrics (optional) ---
+    // Where each link's "Metrics" link goes, typically a dashboard built on the
+    // "cairn.link.click" log events. {slug} is replaced with the link's name, e.g.
+    // https://your-stack.grafana.net/d/abc123/cairn-links?var-slug={slug}
+    "METRICS_DASHBOARD_URL": ""
+  }
+}

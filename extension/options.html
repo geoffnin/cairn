@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cairn settings</title>
+<link rel="stylesheet" href="ui.css">
+<style>
+  body { padding: 32px 16px; }
+  main { max-width: 620px; margin: 0 auto; }
+  h2 { margin-top: 24px; }
+  .choice { display: flex; gap: 12px; align-items: flex-start; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); margin-bottom: 10px; }
+  .choice.on { border-color: var(--accent); }
+  .choice input[type=radio] { margin-top: 3px; }
+  .choice .body { flex: 1; min-width: 0; }
+  .choice .title { display: block; margin: 0; font-size: 14px; color: var(--text); font-weight: 600; cursor: pointer; }
+  .meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .meta.warn { color: var(--danger); }
+  .server { display: flex; gap: 8px; margin-top: 10px; }
+  .server input { flex: 1; min-width: 0; }
+  .acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .acts:empty { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Cairn</h1>
+  <p class="hint" id="lead">Choose where your go/ links live.</p>
+
+  <h2>Use links from</h2>
+  <div class="choice" id="local-choice">
+    <input type="radio" name="mode" value="local" id="mode-local">
+    <div class="body">
+      <label class="title" for="mode-local">This browser</label>
+      <div class="meta" id="local-meta"></div>
+      <div class="acts"><button type="button" class="quiet" id="manage">Manage links</button></div>
+    </div>
+  </div>
+
+  <div class="choice" id="shared-choice">
+    <input type="radio" name="mode" value="shared" id="mode-shared">
+    <div class="body">
+      <label class="title" for="mode-shared">Shared, from your company's Cairn server</label>
+      <div class="meta">Everyone at your company sees the same links. You sign in with your company account through Cloudflare Access.</div>
+      <form class="server" id="server-form">
+        <input id="server" type="text" placeholder="https://go.example.com" spellcheck="false" autocomplete="off" aria-label="Cairn server URL">
+        <button id="save" type="submit">Use this server</button>
+      </form>
+      <div class="meta" id="shared-meta"></div>
+      <div class="acts" id="shared-acts"></div>
+    </div>
+  </div>
+
+  <p class="msg" id="msg" role="status"></p>
+  <p class="hint">Type <b>go/name</b> in the address bar to open a link, or <b>go</b> then space to search.</p>
+</main>
+<script type="module" src="options.js"></script>
+</body>
+</html>

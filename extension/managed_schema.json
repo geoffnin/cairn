@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "properties": {
+    "serverUrl": {
+      "title": "Cairn server URL",
+      "description": "Origin of your Cairn server, e.g. https://go.example.com. When set by policy, this is the only server the extension uses and users cannot change it.",
+      "type": "string"
+    }
+  }
+}
