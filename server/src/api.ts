@@ -57,7 +57,7 @@ function validateOwner(raw: unknown): string {
 export function handleApi(req: Request, env: Env, user: User, path: string): Promise<Response> {
   // A fixed label per known route (link names replaced), never the raw path: spans group by
   // operation, and nothing a visitor types (an email, say) reaches telemetry.
-  const route = path === "/me" || path === "/links" ? path : /^\/links\/[^/]+$/.test(path) ? "/links/:slug" : "other";
+  const route = path === "/me" || path === "/links" ? path : /^\/links\/[^/]+$/.test(path) ? "/links/:slug" : "unknown";
   return inSpan("cairn.api", { "http.method": req.method, "cairn.api.route": route }, async (span) => {
     const res = await apiRoute(req, env, user, path);
     span.setAttribute("http.status_code", res.status);

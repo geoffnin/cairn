@@ -99,7 +99,7 @@ describe("custom spans", () => {
     await call("/alice@example.com");
     await call("/_/api/links/a@b.c/extra");
     expect(named("cairn.link.lookup")[0]).toMatchObject({ "link.slug": "(invalid)" });
-    expect(named("cairn.api")[0]).toMatchObject({ "cairn.api.route": "other", "http.status_code": 404 });
+    expect(named("cairn.api")[0]).toMatchObject({ "cairn.api.route": "unknown", "http.status_code": 404 });
   });
 
   it("redacts emails from recorded exceptions but not from the error itself", async () => {

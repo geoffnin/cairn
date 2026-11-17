@@ -1001,7 +1001,7 @@ duplicate what the runtime now does natively.
 - *No emails in spans*, matching D27. Attributes are link names, layers, methods, routes and
   status codes. Nothing a visitor types is recorded verbatim: a requested name that is not valid
   link syntax becomes `(invalid)` (also in the click log event, which recorded it as typed
-  before), and unknown API paths become the route `other`. Recorded exceptions have emails
+  before), and unknown API paths become the route `unknown`. Recorded exceptions have emails
   redacted from message and stack, since some errors name the person ("x@y is not allowed").
   A test sends emails through each of these paths and checks nothing recorded contains `@`.
 - *Testable without the runtime.* The wrapper accepts a recording tracer in tests. In the local
