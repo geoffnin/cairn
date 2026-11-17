@@ -37,7 +37,8 @@
     if (busy) return;
     busy = true;
     try {
-      oncreated?.(await create({ slug: slug.trim(), url: url.trim(), description: description.trim() }));
+      const link = await create({ slug: slug.trim(), url: url.trim(), description: description.trim() });
+      oncreated?.(link);
     } catch (err) {
       message = { text: (err as Error).message, error: true };
     } finally {

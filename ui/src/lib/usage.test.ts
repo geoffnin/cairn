@@ -44,6 +44,17 @@ describe("usage", () => {
     expect(model.markers[0]).toMatchObject({ index: 3 });
   });
 
+  it("sets same-day change markers side by side", () => {
+    const d = days("2026-10-01", [1, 2, 3]);
+    const model = chartModel(d, [
+      { n: 3, date: "2026-10-02", what: "Owner changed", by: "lee@" },
+      { n: 2, date: "2026-10-02", what: "Description changed", by: "lee@" },
+      { n: 1, date: "2026-10-01", what: "Destination changed", by: "maya@" },
+    ]);
+    expect(model.markers.map((m) => [m.change.n, m.index, m.slot])).toEqual([[1, 0, 0], [2, 1, 0], [3, 1, 1]]);
+    expect(model.markers[1]!.x).toBe(model.markers[2]!.x);
+  });
+
   it("marks month starts on long ranges", () => {
     const model = chartModel(days("2026-08-20", new Array(90).fill(1)));
     expect(model.xTicks.map((t) => t.label)).toEqual(["Sep 1", "Oct 1", "Nov 1"]);

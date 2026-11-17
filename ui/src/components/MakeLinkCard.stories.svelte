@@ -18,6 +18,11 @@
   await expect(args.oncreated).toHaveBeenCalled();
 }} />
 <Story name="Nobody tried it before" args={{ tries: 0 }} />
+<Story name="Creates without an oncreated listener" args={{ oncreated: undefined }} play={async ({ args, canvas, userEvent }) => {
+  await userEvent.type(canvas.getByLabelText("Destination"), "https://pager.example.com/schedules/sre");
+  await userEvent.click(canvas.getByRole("button", { name: "Create link and open it" }));
+  await expect(args.create).toHaveBeenCalledOnce();
+}} />
 <Story name="Create fails" args={{ create: fn(async () => { throw new Error("Enter a full address, starting with https://."); }) }}
   play={async ({ canvas, userEvent }) => {
     await userEvent.type(canvas.getByLabelText("Destination"), "https://x.example.com");

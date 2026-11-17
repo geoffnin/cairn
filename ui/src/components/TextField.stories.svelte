@@ -15,6 +15,9 @@
   await expect(canvas.getByLabelText("Name")).toHaveValue("q4");
 }} />
 <Story name="Mono, with a note" args={{ label: "Destination", note: "· this tab", mono: true, value: "https://docs.example.com/…/q4-planning" }} />
+<Story name="Caller's id" args={{ label: "Name", go: true, id: "slug" }} play={async ({ canvas }) => {
+  await expect(canvas.getByLabelText("Name")).toHaveAttribute("id", "slug");
+}} />
 <Story name="Hint" args={{ label: "Description", note: "(optional, helps people find it)", hint: "Shown in suggestions as people type." }} />
 <Story name="Error" args={{ label: "Destination", mono: true, value: "docs", error: "Enter a full address, starting with https://." }}
   play={async ({ canvas }) => {

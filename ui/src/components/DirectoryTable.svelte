@@ -37,10 +37,14 @@
     if (e.key === "j" || e.key === "k") {
       e.preventDefault();
       selected = Math.min(links.length - 1, Math.max(0, selected + (e.key === "j" ? 1 : -1)));
-      body?.rows[selected]?.scrollIntoView({ block: "nearest" });
+      const row = body?.rows[selected];
+      row?.scrollIntoView({ block: "nearest" });
+      // When focus is in the list, it follows the selection, so Enter opens the selected link.
+      if (body?.contains(document.activeElement)) row?.querySelector<HTMLElement>("a")?.focus();
     } else if (current && e.key === "Enter" && !target?.closest("a, button")) {
       e.preventDefault();
-      onopen?.(current);
+      if (onopen) onopen(current);
+      else body?.rows[selected]?.querySelector<HTMLElement>("a")?.click();
     } else if (current && e.key === "y") {
       oncopy?.(current);
     } else if (current && e.key === "e") {

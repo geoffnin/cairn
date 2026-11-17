@@ -2,14 +2,14 @@
      A button, because it does something here rather than go somewhere; with href it is a link. -->
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import type { HTMLButtonAttributes } from "svelte/elements";
+  import type { HTMLAnchorAttributes, HTMLButtonAttributes } from "svelte/elements";
 
   type Props = HTMLButtonAttributes & { href?: string; muted?: boolean; children: Snippet };
   let { href, muted = false, type = "button", children, ...rest }: Props = $props();
 </script>
 
 {#if href}
-  <a class="lb" class:muted {href}>{@render children()}</a>
+  <a class="lb" class:muted {href} {...rest as HTMLAnchorAttributes}>{@render children()}</a>
 {:else}
   <button class="lb" class:muted {type} {...rest}>{@render children()}</button>
 {/if}

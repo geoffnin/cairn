@@ -25,21 +25,23 @@
   };
   let {
     label, value = $bindable(""), input = $bindable(), go = false, mono = false,
-    note, hint, error, invalid = false, help, action, describedby, class: className = "", type = "text", ...rest
+    note, hint, error, invalid = false, help, action, describedby, class: className = "", type = "text", id: ownId, ...rest
   }: Props = $props();
-  const id = $props.id();
+  const generated = $props.id();
+  const id = $derived(ownId ?? generated);
+  const inputId = $derived(ownId ?? `${generated}-input`);
   const below = $derived(Boolean(error || help || hint));
   const described = $derived([below ? `${id}-below` : "", describedby ?? ""].filter(Boolean).join(" ") || undefined);
 </script>
 
 <div class="field {className}">
   <div class="top">
-    <label class="cn-label" for="{id}-input">{label}{#if note}{" "}<span class="note">{note}</span>{/if}</label>
+    <label class="cn-label" for={inputId}>{label}{#if note}{" "}<span class="note">{note}</span>{/if}</label>
     {#if action}<span class="action">{@render action()}</span>{/if}
   </div>
   <span class="box" class:go>
     <input
-      bind:this={input} bind:value {type} id="{id}-input"
+      bind:this={input} bind:value {type} id={inputId}
       class="cn-control" class:is-mono={mono || go}
       aria-invalid={error || invalid ? "true" : undefined} aria-describedby={described}
       {...rest}

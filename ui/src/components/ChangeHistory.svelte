@@ -6,7 +6,8 @@
   import { formatDate } from "../lib/format";
   import NumberBadge from "./NumberBadge.svelte";
 
-  type Props = { changes: LinkChange[]; created?: { date: string; by: string }; active?: number | null; now?: Date };
+  /** `created.by` is left out when the creator is not known. */
+  type Props = { changes: LinkChange[]; created?: { date: string; by?: string }; active?: number | null; now?: Date };
   let { changes, created, active = $bindable(null), now = new Date() }: Props = $props();
   const id = $props.id();
 </script>
@@ -28,7 +29,7 @@
     {#if created}
       <li>
         <NumberBadge />
-        <div class="body"><p><span class="what">Created</span> by {created.by}</p></div>
+        <div class="body"><p><span class="what">Created</span>{#if created.by}{" "}by {created.by}{/if}</p></div>
         <time datetime={created.date}>{formatDate(created.date, now)}</time>
       </li>
     {/if}

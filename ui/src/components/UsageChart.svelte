@@ -17,18 +17,24 @@
 
   const model = $derived(chartModel(days, changes));
   let hover = $state<number | null>(null);
-  const markerAt = (i: number) => model.markers.find((m) => m.index === i);
+  /** Every change made on day i, in order. */
+  const changesOn = (i: number) => model.markers.filter((m) => m.index === i).map((m) => m.change);
   // The day shown: the one pointed at, else the active change's day.
   const shown = $derived(hover ?? model.markers.find((m) => m.change.n === active)?.index ?? null);
   const point = $derived(shown === null ? null : model.points[shown]);
-  const change = $derived(shown === null ? undefined : markerAt(shown)?.change);
+  const dayChanges = $derived(shown === null ? [] : changesOn(shown));
   const valueText = $derived(
-    point ? `${formatDay(point.date)}: ${formatCount(point.uses)} uses${change ? `. Change ${change.n}: ${change.what} by ${change.by}` : ""}` : "No day chosen",
+    point
+      ? `${formatDay(point.date)}: ${formatCount(point.uses)} uses${dayChanges.map((c) => `. Change ${c.n}: ${c.what} by ${c.by}`).join("")}`
+      : "No day chosen",
   );
 
   function look(i: number | null) {
     hover = i;
-    active = i === null ? null : (markerAt(i)?.change.n ?? null);
+    if (i === null) return void (active = null);
+    // Keep a change already chosen on this day (from History), else take the day's first.
+    const here = changesOn(i);
+    if (!here.some((c) => c.n === active)) active = here[0]?.n ?? null;
   }
   function onpointermove(e: PointerEvent) {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -45,6 +51,9 @@
   const pct = (v: number, of: number) => `${(v / of) * 100}%`;
 </script>
 
+{#if days.length === 0}
+  <p class="empty">No uses to show for this range.</p>
+{:else}
 <div
   class="plot" role="slider" tabindex="0" aria-label={label}
   aria-valuemin={1} aria-valuemax={days.length} aria-valuenow={(shown ?? days.length - 1) + 1} aria-valuetext={valueText}
@@ -63,8 +72,8 @@
     {#each model.markers as m (m.change.n)}
       <g class="marker" class:on={m.change.n === active}>
         <line x1={m.x} x2={m.x} y1={box.top} y2={box.bottom} />
-        <rect x={m.x - 7} y={0} width="14" height="14" rx="3" />
-        <text x={m.x} y={11} text-anchor="middle">{m.change.n}</text>
+        <rect x={m.x - 7 + m.slot * 16} y={0} width="14" height="14" rx="3" />
+        <text x={m.x + m.slot * 16} y={11} text-anchor="middle">{m.change.n}</text>
       </g>
     {/each}
     {#if point}
@@ -78,10 +87,11 @@
   {#if point}
     <div class="tip" class:flip={point.x > box.width * 0.7} style:left={pct(point.x, box.width)} style:top={pct(Math.min(point.y, box.bottom - 40), box.height)} aria-hidden="true">
       <div class="tip-head"><strong>{formatDay(point.date)}</strong><span>{formatCount(point.uses)} uses</span></div>
-      {#if change}<div class="tip-change"><span class="n">{change.n}</span>{change.what} by {change.by}</div>{/if}
+      {#each dayChanges as c (c.n)}<div class="tip-change" class:on={c.n === active}><span class="n">{c.n}</span>{c.what} by {c.by}</div>{/each}
     </div>
   {/if}
 </div>
+{/if}
 
 <style>
   .plot { position: relative; touch-action: pan-y; border-radius: var(--radius-md); }
@@ -108,6 +118,9 @@
   .tip.flip { margin-left: -12px; transform: translate(-100%, -100%); }
   .tip-head { display: flex; justify-content: space-between; gap: var(--space-4); }
   .tip-head strong { font-weight: 600; }
+  .empty { padding: var(--space-8) 0; text-align: center; font: var(--type-small); color: var(--ink-muted); }
+  .tip-change.on { color: var(--ink); }
+  .tip-change + .tip-change { padding-top: 0; border-top: 0; }
   .tip-change { display: flex; align-items: center; gap: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--line); color: var(--ink-muted); }
   .n { display: inline-grid; place-items: center; width: 14px; height: 14px; border-radius: 3px; font-size: 10px; font-weight: 600; color: var(--surface); background: var(--terracotta); }
 </style>

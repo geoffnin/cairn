@@ -18,26 +18,29 @@
     text, label = "Copy", variant = "default", small = false, keys,
     copy = (t) => navigator.clipboard.writeText(t), oncopied,
   }: Props = $props();
-  let state = $state<"idle" | "copied" | "failed">("idle");
+  let phase = $state<"idle" | "copied" | "failed">("idle");
+  let copied = $state("");
   let timer: ReturnType<typeof setTimeout>;
 
   async function run() {
     clearTimeout(timer);
+    const sent = text; // what this click copies, even if `text` changes while it is on its way
     try {
-      await copy(text);
-      state = "copied";
-      oncopied?.(text);
+      await copy(sent);
+      copied = sent;
+      phase = "copied";
+      oncopied?.(sent);
     } catch {
-      state = "failed";
+      phase = "failed";
     }
-    timer = setTimeout(() => (state = "idle"), 1600);
+    timer = setTimeout(() => (phase = "idle"), 1600);
   }
 </script>
 
 <span class="copy">
-  <Button {variant} {small} onclick={run}>{state === "copied" ? "Copied" : state === "failed" ? "Couldn’t copy" : label}</Button>
+  <Button {variant} {small} onclick={run}>{phase === "copied" ? "Copied" : phase === "failed" ? "Couldn’t copy" : label}</Button>
   {#if keys}<Kbd {keys} />{/if}
-  <span class="cn-visually-hidden" role="status">{state === "copied" ? `Copied ${text}` : ""}</span>
+  <span class="cn-visually-hidden" role="status">{phase === "copied" ? `Copied ${copied}` : ""}</span>
 </span>
 
 <style>

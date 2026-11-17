@@ -8,11 +8,14 @@
   let { slug, check }: { slug: string; check: NameCheck | null } = $props();
 </script>
 
-{#if slug && check?.state === "free"}
-  <span class="note free"><Icon name="check" size={12} /><span><GoName name={slug} /> is free</span></span>
-{:else if slug && check?.state === "checking"}
-  <span class="note">Checking…</span>
-{/if}
+<!-- Always mounted, so screen readers hear the result arrive while the name field has focus. -->
+<span role="status">
+  {#if slug && check?.state === "free"}
+    <span class="note free"><Icon name="check" size={12} /><span><GoName name={slug} /> is free</span></span>
+  {:else if slug && check?.state === "checking"}
+    <span class="note">Checking…</span>
+  {/if}
+</span>
 
 <style>
   .note { display: inline-flex; align-items: center; gap: var(--space-1); font: var(--type-small); color: var(--ink-muted); }

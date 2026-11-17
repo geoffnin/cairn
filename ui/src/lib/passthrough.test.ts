@@ -17,6 +17,7 @@ describe("pass-through", () => {
 
   it("fills and explains the template", () => {
     expect(fillPassThrough("https://x.example.com/{*}", "7")).toBe("https://x.example.com/7");
+    expect(fillPassThrough("https://x.example.com/{*}", "$&")).toBe("https://x.example.com/$&");
     expect(passThroughExamples("rfc", "https://docs.example.com/rfcs/{*}", "0042")).toEqual({ mine: "rfc/0042", other: "rfc/7", otherDest: "…/rfcs/7" });
   });
 });

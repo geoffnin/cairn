@@ -15,7 +15,7 @@ export function suggestPassThrough(url: string): { template: string; token: stri
 }
 
 /** Fills {*} the way the server does. */
-export const fillPassThrough = (template: string, rest: string) => template.replaceAll(PASS_THROUGH, rest);
+export const fillPassThrough = (template: string, rest: string) => template.replaceAll(PASS_THROUGH, () => rest); // a function, so "$&" in rest stays literal
 
 /**
  * The two examples under the field: this page's own ID, and another one, with where it goes.

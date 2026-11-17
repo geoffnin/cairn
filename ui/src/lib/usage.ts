@@ -73,8 +73,11 @@ export interface ChartModel {
   area: string;
   yTicks: { y: number; label: string }[];
   xTicks: { x: number; label: string }[];
-  /** The changes that fall inside the range, at their day's x. */
-  markers: { x: number; index: number; change: LinkChange }[];
+  /**
+   * The changes that fall inside the range, at their day's x. Changes on the same day share the
+   * line; `slot` (0, 1, …) sets their labels side by side, so each number stays visible.
+   */
+  markers: { x: number; index: number; slot: number; change: LinkChange }[];
 }
 
 const tickDate = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
@@ -104,7 +107,12 @@ export function chartModel(days: DailyUses[], changes: LinkChange[] = [], box: C
   const markers = changes
     .map((change) => ({ change, index: dayNumber(change.date) - first }))
     .filter(({ index }) => index >= 0 && index < days.length)
-    .map(({ change, index }) => ({ change, index, x: x(index) }));
+    .sort((a, b) => a.index - b.index || a.change.n - b.change.n)
+    .map(({ change, index }, i, all) => {
+      let slot = 0;
+      while (i - slot - 1 >= 0 && all[i - slot - 1]!.index === index) slot++;
+      return { change, index, slot, x: x(index) };
+    });
 
   return { points, line, area, yTicks, xTicks, markers };
 }

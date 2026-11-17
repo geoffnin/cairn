@@ -24,4 +24,16 @@
   await expect(args.onedit).toHaveBeenCalledWith(expect.objectContaining({ slug: "bug" }));
   await expect(canvas.getByText("8 of 214")).toBeVisible();
 }} />
+<Story name="Focus follows the selection" args={{ selected: 1 }} play={async ({ canvas, userEvent }) => {
+  canvas.getByRole("link", { name: "bug" }).focus();
+  await userEvent.keyboard("j");
+  await expect(canvas.getByRole("link", { name: "roadmap" })).toHaveFocus();
+}} />
+<Story name="Enter follows the link without onopen" args={{ selected: 2, onopen: undefined }} play={async ({ canvas, userEvent }) => {
+  const link = canvas.getByRole("link", { name: "roadmap" });
+  let followed = false;
+  link.addEventListener("click", (e) => { e.preventDefault(); followed = true; }, { once: true });
+  await userEvent.keyboard("{Enter}");
+  await expect(followed).toBe(true);
+}} />
 <Story name="No results" args={{ links: [], query: "zzz" }} />

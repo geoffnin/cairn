@@ -17,7 +17,7 @@
     link: Link & { created: string; changed?: string; lastUsed?: string };
     uses: DailyUses[];
     changes: LinkChange[];
-    /** Who created it, as History shows it. */
+    /** Who created it, as History shows it. Not the owner, which can change hands. */
     createdBy?: string;
     source?: string;
     now?: Date;
@@ -28,7 +28,7 @@
     ondelete?: (link: Link) => void;
   };
   let {
-    host, me, link, uses, changes, createdBy = link.owner ?? "", source, now, allLinksHref = "#all", signOutHref = "#signout",
+    host, me, link, uses, changes, createdBy, source, now, allLinksHref = "#all", signOutHref = "#signout",
     copy, onedit, ondelete,
   }: Props = $props();
   let active = $state<number | null>(null);
