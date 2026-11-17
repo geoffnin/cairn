@@ -5,18 +5,15 @@
 //   dev    - fixed user, honoured on localhost only.
 import { verifyJwt } from "./jwt";
 import { seal, unseal } from "./seal";
-import type { Env, User } from "./types";
-import { b64urlEncode, csv, getCookie, randomToken, redirect, safeReturnPath, setCookie } from "./util";
+import { lookupToken } from "./tokens";
+import type { Env, Identity, User } from "./types";
+import { b64urlEncode, bearerToken, csv, getCookie, randomToken, redirect, safeReturnPath, setCookie } from "./util";
 
 const SESSION_COOKIE = "cairn_session";
 const FLOW_COOKIE = "cairn_oidc";
 const FLOW_TTL = 600;
 
-interface Session {
-  email: string;
-  name: string;
-  groupAdmin: boolean;
-}
+type Session = Identity & { kind?: string };
 interface Flow {
   state: string;
   nonce: string;
@@ -40,11 +37,11 @@ export class AuthError extends Error {
   }
 }
 
-function mode(env: Env): string {
+export function mode(env: Env): string {
   return (env.AUTH_MODE || "oidc").toLowerCase();
 }
 
-function sessionSecret(env: Env): string {
+export function sessionSecret(env: Env): string {
   if (!env.SESSION_SECRET || env.SESSION_SECRET.length < 32) {
     throw new AuthError("Server misconfigured: SESSION_SECRET must be set to at least 32 characters.", 500);
   }
@@ -53,10 +50,10 @@ function sessionSecret(env: Env): string {
 
 function toUser(env: Env, email: string, name: string, groupAdmin: boolean): User {
   email = email.toLowerCase();
-  return { email, name: name || email, isAdmin: groupAdmin || csv(env.ADMIN_EMAILS).includes(email) };
+  return { email, name: name || email, isAdmin: groupAdmin || csv(env.ADMIN_EMAILS).includes(email), groupAdmin };
 }
 
-function assertAllowed(env: Env, email: string): void {
+export function assertAllowed(env: Env, email: string): void {
   const domains = csv(env.ALLOWED_EMAIL_DOMAINS);
   if (domains.length && !domains.includes(email.toLowerCase().split("@")[1] ?? "")) {
     throw new AuthError(`${email} is not allowed to use this service.`);
@@ -99,8 +96,19 @@ export async function authenticate(req: Request, env: Env): Promise<User | null>
     }
 
     case "oidc": {
-      const s = await unseal<Session>(getCookie(req, SESSION_COOKIE), sessionSecret(env));
-      return s ? toUser(env, s.email, s.name, s.groupAdmin) : null;
+      // The browser extension signs in once and then presents a long-lived, revocable token.
+      const token = bearerToken(req);
+      let who: Identity | null;
+      if (token) {
+        who = await lookupToken(env, token);
+      } else {
+        const s = await unseal<Session>(getCookie(req, SESSION_COOKIE), sessionSecret(env));
+        who = s && typeof s.email === "string" && !s.kind ? s : null;
+      }
+      if (!who) return null;
+      // Re-checked on every request so tightening ALLOWED_EMAIL_DOMAINS takes effect immediately.
+      assertAllowed(env, who.email);
+      return toUser(env, who.email, who.name, who.groupAdmin);
     }
 
     default:

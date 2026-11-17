@@ -2,21 +2,46 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Cairn Go Links settings</title>
+<title>Cairn settings</title>
 <link rel="stylesheet" href="ui.css">
-<style>body { padding: 32px 16px; } main { max-width: 480px; margin: 0 auto; }</style>
+<style>
+  body { padding: 32px 16px; }
+  main { max-width: 620px; margin: 0 auto; }
+  h2 { font-size: 14px; margin: 24px 0 8px; }
+  ul { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+  li { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  li:last-child { border-bottom: 0; }
+  li .info { flex: 1; min-width: 200px; }
+  li .host { font-weight: 600; overflow-wrap: anywhere; }
+  li .meta { font-size: 12px; color: var(--muted); }
+  li .meta.warn { color: var(--danger); }
+  li .acts { display: flex; gap: 6px; }
+  li.empty { color: var(--muted); }
+  button.quiet { background: none; color: var(--accent); border-color: var(--line); font-weight: 500; padding: 5px 10px; font-size: 13px; }
+  button.quiet.danger { color: var(--danger); }
+  .add { display: flex; gap: 8px; }
+  .add input { flex: 1; }
+</style>
 </head>
 <body>
 <main>
-  <h1>Cairn Go Links</h1>
-  <form id="form">
-    <label for="server">Server URL</label>
-    <input id="server" type="text" required placeholder="https://go.example.com" spellcheck="false" autocomplete="off">
-    <p class="hint" id="hint">The address of your company's Cairn server. Ask whoever runs it if you are unsure.</p>
-    <div class="row"><button id="save" type="submit">Save</button></div>
-  </form>
+  <h1>Cairn</h1>
+  <p class="hint" id="lead">Choose which Cairn server this browser uses. You sign in once when you add a server.</p>
+
+  <h2>Servers</h2>
+  <ul id="list"></ul>
+
+  <div id="add-section">
+    <h2><label for="server" style="all:unset">Add a server</label></h2>
+    <form id="add" class="add">
+      <input id="server" type="text" required placeholder="https://go.example.com" spellcheck="false" autocomplete="off">
+      <button id="add-btn" type="submit">Add and sign in</button>
+    </form>
+    <p class="hint">The address of your company's Cairn server. Ask whoever runs it if you are unsure.</p>
+  </div>
+
   <p class="msg" id="msg" role="status"></p>
-  <p class="hint">Once saved, type <b>go/name</b> in the address bar, or <b>go</b> then space then a name to search.</p>
+  <p class="hint" id="usage"></p>
 </main>
 <script type="module" src="options.js"></script>
 </body>

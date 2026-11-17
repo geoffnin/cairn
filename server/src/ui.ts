@@ -6,7 +6,7 @@ const PAGE = /* html */ `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cairn go links</title>
+<title>Cairn links</title>
 <style>
   :root {
     --bg: #f7f6f3; --surface: #fff; --text: #1d1c1a; --muted: #6b6860; --line: #e2dfd8;
@@ -71,7 +71,7 @@ const PAGE = /* html */ `<!doctype html>
 <main>
   <header>
     <h1>Cairn</h1>
-    <span class="hint">Short links for your team. Type <b>go/name</b> in the address bar.</span>
+    <span class="hint">Short links for your team. Type <b>__PREFIX__/name</b> in the address bar.</span>
     <span id="who"></span>
   </header>
 
@@ -80,7 +80,7 @@ const PAGE = /* html */ `<!doctype html>
     <form class="new" id="new">
       <div>
         <label for="n-slug">Name</label>
-        <div class="slug"><span>go/</span><input id="n-slug" type="text" required maxlength="64" autocomplete="off" spellcheck="false" placeholder="roadmap"></div>
+        <div class="slug"><span>__PREFIX__/</span><input id="n-slug" type="text" required maxlength="64" autocomplete="off" spellcheck="false" placeholder="roadmap"></div>
       </div>
       <div>
         <label for="n-url">Destination URL</label>
@@ -90,7 +90,7 @@ const PAGE = /* html */ `<!doctype html>
         <label for="n-desc">Description (optional)</label>
         <input id="n-desc" type="text" maxlength="500" autocomplete="off">
       </div>
-      <p class="hint wide">Use <code>{*}</code> to pass text through: <code>https://tracker.example.com/browse/{*}</code> makes <b>go/bug/ABC-12</b> open that ticket.</p>
+      <p class="hint wide">Use <code>{*}</code> to pass text through: <code>https://tracker.example.com/browse/{*}</code> makes <b>__PREFIX__/bug/ABC-12</b> open that ticket.</p>
       <div class="wide"><button class="primary" type="submit">Create link</button></div>
     </form>
     <p class="msg" id="n-msg" role="status"></p>
@@ -124,6 +124,7 @@ const PAGE = /* html */ `<!doctype html>
 
 <script nonce="__NONCE__">
 const $ = (id) => document.getElementById(id);
+const P = '__PREFIX__/';
 
 async function api(method, path, body) {
   const res = await fetch('/_/api' + path, {
@@ -158,8 +159,8 @@ function row(l) {
     edit.onclick = () => openEdit(l);
     const del = el('button', { className: 'link danger', type: 'button', textContent: 'Delete' });
     del.onclick = async () => {
-      if (!confirm('Delete go/' + l.slug + '? Anyone using it will land on the "create link" page instead.')) return;
-      try { await api('DELETE', '/links/' + encodeURIComponent(l.slug)); say('l-msg', 'Deleted go/' + l.slug + '.'); load(); }
+      if (!confirm('Delete ' + P + l.slug + '? Anyone using it will land on the "create link" page instead.')) return;
+      try { await api('DELETE', '/links/' + encodeURIComponent(l.slug)); say('l-msg', 'Deleted ' + P + l.slug + '.'); load(); }
       catch (e) { say('l-msg', e.message, true); }
     };
     actions.append(edit, del);
@@ -167,7 +168,7 @@ function row(l) {
   const dest = el('td', { className: 'url' }, el('span', { textContent: l.url }));
   if (l.description) dest.append(el('small', { textContent: l.description }));
   return el('tr', null,
-    el('td', { className: 'name' }, el('a', { href: '/' + encodeURIComponent(l.slug), textContent: 'go/' + l.slug })),
+    el('td', { className: 'name' }, el('a', { href: '/' + encodeURIComponent(l.slug), textContent: P + l.slug })),
     dest,
     el('td', { textContent: l.owner }),
     el('td', { className: 'num', textContent: String(l.clicks) }),
@@ -190,7 +191,7 @@ async function load() {
 
 function openEdit(l) {
   editing = l.slug;
-  $('e-title').textContent = 'Edit go/' + l.slug;
+  $('e-title').textContent = 'Edit ' + P + l.slug;
   $('e-url').value = l.url; $('e-desc').value = l.description; $('e-owner').value = l.owner;
   say('e-msg', '');
   $('edit').showModal();
@@ -201,7 +202,7 @@ $('e-form').onsubmit = async (ev) => {
   ev.preventDefault();
   try {
     await api('PUT', '/links/' + encodeURIComponent(editing), { url: $('e-url').value, description: $('e-desc').value, owner: $('e-owner').value });
-    $('edit').close(); say('l-msg', 'Saved go/' + editing + '.'); load();
+    $('edit').close(); say('l-msg', 'Saved ' + P + editing + '.'); load();
   } catch (e) { say('e-msg', e.message, true); }
 };
 
@@ -209,7 +210,7 @@ $('new').onsubmit = async (ev) => {
   ev.preventDefault();
   try {
     const l = await api('POST', '/links', { slug: $('n-slug').value, url: $('n-url').value, description: $('n-desc').value });
-    say('n-msg', 'Created go/' + l.slug + '.');
+    say('n-msg', 'Created ' + P + l.slug + '.');
     ev.target.reset(); history.replaceState(null, '', '/_/'); load();
   } catch (e) { say('n-msg', e.message, true); }
 };
@@ -221,7 +222,7 @@ $('mine').onchange = load;
 const params = new URLSearchParams(location.search);
 if (params.get('new')) {
   $('n-slug').value = params.get('new');
-  say('n-msg', 'go/' + params.get('new') + ' does not exist yet. Add a destination to create it.');
+  say('n-msg', P + params.get('new') + ' does not exist yet. Add a destination to create it.');
   $('n-url').focus();
 }
 if (params.get('url')) $('n-url').value = params.get('url');
@@ -234,9 +235,9 @@ load();
 </body>
 </html>`;
 
-export function renderUi(): Response {
+export function renderUi(prefix: string): Response {
   const nonce = randomToken(16);
-  return new Response(PAGE.replace("__NONCE__", nonce), {
+  return new Response(PAGE.replace("__NONCE__", nonce).replaceAll("__PREFIX__", prefix), {
     headers: {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store",

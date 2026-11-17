@@ -11,7 +11,8 @@ import {
   validateUrl,
 } from "./links";
 import type { Env, Link, User } from "./types";
-import { json } from "./util";
+import { revokeToken, revokeTokensFor } from "./tokens";
+import { bearerToken, json, linkPrefix } from "./util";
 
 const canEdit = (user: User, link: Link) => user.isAdmin || link.owner === user.email;
 const present = (user: User, link: Link) => ({ ...link, can_edit: canEdit(user, link) });
@@ -52,8 +53,22 @@ export async function handleApi(req: Request, env: Env, user: User, path: string
     const denied = checkCsrf(req);
     if (denied) return denied;
   }
+  const prefix = linkPrefix(env);
   try {
     if (path === "/me" && !write) return json(user);
+
+    // Sign the calling extension out (revokes the bearer token it presented).
+    if (path === "/tokens/current" && req.method === "DELETE") {
+      const token = bearerToken(req);
+      if (token) await revokeToken(env, token);
+      return json({ ok: true });
+    }
+    // Revoke every extension sign-in for yourself, or (admins) for ?email=someone.
+    if (path === "/tokens" && req.method === "DELETE") {
+      const email = (new URL(req.url).searchParams.get("email") || user.email).trim().toLowerCase();
+      if (email !== user.email && !user.isAdmin) return json({ error: "Only admins can sign other people out." }, 403);
+      return json({ ok: true, revoked: await revokeTokensFor(env, email) });
+    }
 
     if (path === "/links") {
       if (!write) {
@@ -74,7 +89,7 @@ export async function handleApi(req: Request, env: Env, user: User, path: string
           description: validateDescription(b.description),
           owner: user.email,
         });
-        if (!link) return json({ error: `go/${slug} already exists.` }, 409);
+        if (!link) return json({ error: `${prefix}/${slug} already exists.` }, 409);
         return json(present(user, link), 201);
       }
     }
@@ -83,9 +98,9 @@ export async function handleApi(req: Request, env: Env, user: User, path: string
     if (m) {
       const slug = normalizeSlug(decodeURIComponent(m[1]!));
       const link = await getLink(env, slug);
-      if (!link) return json({ error: `go/${slug} does not exist.` }, 404);
+      if (!link) return json({ error: `${prefix}/${slug} does not exist.` }, 404);
       if (!write) return json(present(user, link));
-      if (!canEdit(user, link)) return json({ error: `Only ${link.owner} or an admin can change go/${slug}.` }, 403);
+      if (!canEdit(user, link)) return json({ error: `Only ${link.owner} or an admin can change ${prefix}/${slug}.` }, 403);
 
       if (req.method === "PUT") {
         const b = await body(req);

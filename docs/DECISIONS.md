@@ -167,7 +167,9 @@ switch.
 
 ## D7. The extension only rewrites `go/...`; the server owns identity
 
-**Date:** 2026-11-17 · **Status:** accepted
+**Date:** 2026-11-17 · **Status:** partly superseded by D13 (prefix), D14 (several servers) and
+D15 (the extension now holds a sign-in token). The redirect mechanism and permission model
+below still stand.
 
 **Decision.** The Chrome extension (Manifest V3) does three things:
 
@@ -288,8 +290,122 @@ flow, forged/expired/wrong-audience tokens, open-redirect attempts, Access mode 
 The extension was exercised end to end in Chromium against a local server (redirect rule,
 unknown-link flow, popup with and without host access).
 
-**Not yet verified.** A deployment against a live Cloudflare account and a live Okta tenant, and
+The second round (D13 to D15) was tested the same way, plus a browser run against a local fake
+OIDC provider covering: add a server, sign in once, clear all cookies and still resolve links,
+a custom prefix, switching between two servers, sign out and remove.
+
+**Not yet verified.** Chrome's permission prompt itself (the test build pre-granted the hosts,
+since headless Chrome cannot click the prompt), a deployment against a live Cloudflare account and a live Okta tenant, and
 how Chrome's address bar treats a typed `go/name` on first use (see README, "Using it").
+
+---
+
+## D13. The server decides the prefix
+
+**Date:** 2026-11-17 · **Status:** accepted
+
+**Decision.** `LINK_PREFIX` on the server (default `go`) sets the word typed before the slash.
+The server publishes it, with its sign-in method, at the unauthenticated endpoint `/_/config`.
+The extension reads it when a server is added and again at browser start, and builds its
+redirect rule from it. The web UI and API messages use it too.
+
+**Why on the server.** The prefix is a property of the company's deployment, not of each
+person's browser. Setting it once on the server means nobody configures it by hand and a
+change rolls out by itself.
+
+**Constraints.** The prefix must be a single DNS label (letters, digits, hyphens, up to 32
+characters) because the browser treats it as a hostname. An invalid value makes the server
+refuse to start serving rather than guess.
+
+**Consequences.**
+
+- The extension ships with host access to `*://go/*` only. For any other prefix Chrome asks
+  the user to allow `*://<prefix>/*` when they add the server. If the prefix later changes, the
+  settings page shows a "Grant access" button; redirects for the new prefix do not work until
+  it is clicked. A company that knows its prefix can put it in `host_permissions` in its own
+  build to avoid the prompt.
+- `/_/config` is public and sends `Access-Control-Allow-Origin: *`. It reveals only the prefix
+  and sign-in mode, which anyone with the extension already knows.
+- The address-bar *keyword* (type `go`, press space, search) is fixed in the extension manifest
+  and stays `go` whatever the prefix. Chrome does not let extensions change it at runtime.
+  Change `omnibox.keyword` in `manifest.json` for a custom build.
+
+---
+
+## D14. The extension can hold several servers; one is in use at a time
+
+**Date:** 2026-11-17 · **Status:** accepted
+
+**Decision.** The settings page keeps a list of servers. One is active; its prefix is the one
+that redirects. The active server can be changed in settings or from the toolbar popup. The
+list syncs with the Chrome profile; sign-ins do not.
+
+**Why one at a time.** Two servers may use the same prefix (staging and production both on
+`go`), so "all at once" would be ambiguous. A single explicit choice is predictable.
+
+**Policy.** A `serverUrl` set through managed storage still pins the server and hides the list
+controls. The user only signs in.
+
+---
+
+## D15. The extension signs in once and holds a revocable token
+
+**Date:** 2026-11-17 · **Status:** accepted · **Changes:** D7 ("stores no credentials") and the
+trade-off in D5
+
+**Context.** With only the 24-hour web session (D5), people were bounced through the IdP daily
+and the extension had no sign-in of its own. The request was to authenticate once, when the
+server is configured.
+
+**Decision.** In `oidc` mode, adding a server starts a one-time sign-in:
+
+1. The extension opens `/_/auth/extension?challenge=<hash of a secret it keeps>`. The person
+   signs in through the normal OIDC flow if needed.
+2. A consent page names the account. Approving it lands on a page whose URL carries a
+   two-minute, signed code.
+3. The extension reads the code from that tab and exchanges it, with its secret, for a token.
+
+From then on the extension attaches the token (`Authorization: Bearer`) to its own API calls
+and, through a second `declarativeNetRequest` rule, to page loads and API calls on the active
+server. So redirects and the website work without the web session cookie.
+
+**Token design.**
+
+- Random, 30 days by default (`EXTENSION_TOKEN_TTL_DAYS`). Stored hashed in D1
+  (`extension_tokens`), never in the clear, so a database leak does not leak sign-ins.
+- **Revocable**, unlike session cookies: the extension's "Sign out", `DELETE /_/api/tokens`
+  (all of your own), and `DELETE /_/api/tokens?email=` for admins. Validations are cached in
+  memory for 60 seconds, so revocation takes up to a minute to reach every isolate.
+- `ALLOWED_EMAIL_DOMAINS` is re-checked on every request, for tokens and cookies alike.
+- Kept in `chrome.storage.local`, which is not synced between devices.
+
+**Why this flow.**
+
+- *Code plus secret (PKCE-style), not a token in the URL.* Anything that can see the tab's
+  address gets a code it cannot redeem.
+- *A consent click.* Without it, any page or extension could start the flow in the background
+  for someone already signed in and collect a token.
+- *Watching a tab instead of `chrome.identity.launchWebAuthFlow`.* It needs no extra
+  permission, works identically in every Chromium browser, and could be tested end to end.
+  It needs host access to the server, which the extension requests anyway.
+
+**Trade-offs, stated plainly.**
+
+- Someone removed from the IdP keeps working links for up to 30 days unless an admin revokes
+  their tokens or `ALLOWED_EMAIL_DOMAINS` excludes them. Offboarding should include the revoke
+  call. Shorten `EXTENSION_TOKEN_TTL_DAYS` if that gap is too long.
+- Admin-by-group is captured at sign-in and lasts as long as the token. `ADMIN_EMAILS` is still
+  checked live.
+- While the extension is signed in, the website's "Sign out" only clears the cookie; the
+  extension keeps the browser signed in until "Sign out" is used in its settings.
+- The header is attached to any request for the server, including ones started by other sites.
+  The CSRF rules in D8 still apply to those, so this adds no write path.
+- Not used in `access` mode: Cloudflare Access owns the session there and would block requests
+  before the token is seen.
+
+**Found during testing.** A consent page served with `Referrer-Policy: no-referrer` makes
+Chrome send `Origin: null` on its own form post, which the origin check then rejects. The page
+uses `same-origin`.
 
 ---
 
@@ -301,5 +417,6 @@ Not built, on purpose, until someone needs them:
 - Link expiry, aliases, and per-link visibility.
 - Group-owned links.
 - Firefox and Safari extensions (Firefox should need only manifest changes).
-- SCIM or other deprovisioning hooks (see the D5 trade-off).
+- SCIM or other deprovisioning hooks (see the D5 and D15 trade-offs).
+- A screen for admins to see and revoke extension sign-ins (the API exists).
 - Infrastructure-as-code for the Cloudflare resources; three `wrangler` commands do it today.

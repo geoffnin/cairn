@@ -1,9 +1,10 @@
 import { handleApi } from "./api";
-import { AuthError, authenticate, handleCallback, handleLogin, handleLogout } from "./auth";
+import { AuthError, authenticate, handleCallback, handleLogin, handleLogout, mode } from "./auth";
+import { handleExtensionConnect, handleExtensionDone, handleExtensionToken } from "./extauth";
 import { lookupTarget, recordClick, resolveTarget } from "./links";
 import type { Env } from "./types";
 import { renderUi } from "./ui";
-import { json, redirect } from "./util";
+import { json, linkPrefix, redirect } from "./util";
 
 // Everything that is not a go link lives under /_/ ("_" can never start a link name).
 async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -13,6 +14,12 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
   if (path === "/_/healthz") return new Response("ok");
   if (path === "/robots.txt") return new Response("User-agent: *\nDisallow: /\n");
   if (path === "/favicon.ico") return new Response(null, { status: 204 });
+  // Public, so the extension can learn the prefix and sign-in method before anyone is signed in.
+  if (path === "/_/config") {
+    return json({ name: "Cairn", prefix: linkPrefix(env), auth: mode(env) }, 200, { "access-control-allow-origin": "*" });
+  }
+  if (path === "/_/auth/extension/token") return handleExtensionToken(req, env);
+  if (path === "/_/auth/extension/done") return handleExtensionDone();
   if (path === "/_/auth/login") return handleLogin(req, env);
   if (path === "/_/auth/callback") return handleCallback(req, env);
   if (path === "/_/auth/logout") return handleLogout(req, env);
@@ -26,10 +33,11 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
 
   if (isApi) return handleApi(req, env, user, path.slice("/_/api".length));
   if (path === "/" || path === "/_") return redirect("/_/");
-  if (path === "/_/") return renderUi();
+  if (path === "/_/auth/extension") return handleExtensionConnect(req, env, user);
+  if (path === "/_/") return renderUi(linkPrefix(env));
   if (path.startsWith("/_/")) return new Response("Not found", { status: 404 });
 
-  // go/<slug>[/<rest>]
+  // <prefix>/<slug>[/<rest>]
   if (req.method !== "GET" && req.method !== "HEAD") return new Response("Method not allowed", { status: 405 });
   const cut = path.indexOf("/", 1);
   const rawSlug = cut === -1 ? path.slice(1) : path.slice(1, cut);

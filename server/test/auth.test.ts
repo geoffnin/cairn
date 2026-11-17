@@ -105,7 +105,7 @@ describe("oidc", () => {
     expect(tr.auth).toBe(`Basic ${btoa("cairn-client:shh")}`);
 
     const me = await call("/_/api/me", { as: null, headers: { cookie: cookieOf(cb, "cairn_session")! } });
-    expect(await me.json()).toEqual({ email: "carol@example.com", name: "Carol", isAdmin: true });
+    expect(await me.json()).toEqual({ email: "carol@example.com", name: "Carol", isAdmin: true, groupAdmin: true });
   });
 
   async function callbackWith(claims: Record<string, unknown>, env = {}) {
@@ -174,6 +174,12 @@ describe("oidc", () => {
     expect((await call("/_/api/me", { as: null, headers: { cookie: `cairn_session=${forgedBody}.${sig}` } })).status).toBe(401);
     expect((await call("/_/api/me", { as: null, headers: { cookie: `cairn_session=${body}.${sig}` } })).status).toBe(200);
     expect((await call("/_/api/me", { as: null, env: { SESSION_SECRET: "a-different-secret-of-sufficient-length!" }, headers: { cookie: good } })).status).toBe(401);
+  });
+
+  it("applies ALLOWED_EMAIL_DOMAINS to sessions that already exist", async () => {
+    expect((await call("/_/api/me", { env: { ALLOWED_EMAIL_DOMAINS: "example.com" } })).status).toBe(200);
+    expect((await call("/_/api/me", { env: { ALLOWED_EMAIL_DOMAINS: "corp.test" } })).status).toBe(403);
+    expect((await call("/docs", { env: { ALLOWED_EMAIL_DOMAINS: "corp.test" } })).status).toBe(403);
   });
 
   it("fails closed without a strong session secret", async () => {

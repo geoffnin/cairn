@@ -45,8 +45,16 @@
     // --- authorization ---
     "ADMIN_EMAILS": "",          // comma separated; admins can edit/delete any link
     "ADMIN_GROUPS": "",          // comma separated; matched against the `groups` claim
-    "ALLOWED_EMAIL_DOMAINS": "", // comma separated; empty = anyone the IdP lets in
+    // Restrict sign-in to these email domains, e.g. "example.com,example.co.uk".
+    // Empty = anyone your IdP lets in. Checked at sign-in and again on every request.
+    "ALLOWED_EMAIL_DOMAINS": "",
 
-    "SESSION_TTL_HOURS": "24"
+    "SESSION_TTL_HOURS": "24",
+
+    // The word typed before the slash: "go" gives go/roadmap. One DNS label (letters, digits, hyphens).
+    "LINK_PREFIX": "go",
+
+    // How long the browser extension stays signed in after its one-time sign-in.
+    "EXTENSION_TOKEN_TTL_DAYS": "30"
   }
 }

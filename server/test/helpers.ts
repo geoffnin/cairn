@@ -15,6 +15,7 @@ export interface CallOpts {
   as?: string | null; // email to sign in as; null = anonymous
   method?: string;
   body?: unknown;
+  rawBody?: string;
   headers?: Record<string, string>;
   env?: Partial<Env>;
   origin?: string;
@@ -29,7 +30,7 @@ export async function call(path: string, opts: CallOpts = {}): Promise<Response>
   const req = new Request((opts.origin ?? ORIGIN) + path, {
     method,
     headers,
-    body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+    body: opts.rawBody ?? (opts.body === undefined ? undefined : JSON.stringify(opts.body)),
     redirect: "manual",
   });
   const ctx = createExecutionContext();

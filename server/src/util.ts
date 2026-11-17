@@ -63,3 +63,20 @@ export function setCookie(req: Request, name: string, value: string, maxAge: num
 export function safeReturnPath(rd: string | null): string {
   return rd && /^\/(?![/\\])/.test(rd) ? rd : "/_/";
 }
+
+export function bearerToken(req: Request): string | null {
+  const m = /^Bearer\s+(\S+)$/i.exec(req.headers.get("authorization") ?? "");
+  return m ? m[1]! : null;
+}
+
+/**
+ * The word people type before the slash ("go" in go/roadmap). It is used as a hostname by the
+ * browser extension, so it must be a single DNS label.
+ */
+export function linkPrefix(env: { LINK_PREFIX?: string }): string {
+  const p = (env.LINK_PREFIX || "go").trim().toLowerCase();
+  if (!/^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$/.test(p)) {
+    throw new Error(`LINK_PREFIX "${env.LINK_PREFIX}" is invalid: use 1-32 letters, digits or hyphens.`);
+  }
+  return p;
+}
