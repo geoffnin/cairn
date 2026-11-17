@@ -30,7 +30,7 @@
       <col class="name" /><col />{#if shared}<col class="owner" />{/if}<col class="actions" />
     </colgroup>
     <thead>
-      <tr><th>Name</th><th>Destination</th>{#if shared}<th>Owner</th>{/if}<th></th></tr>
+      <tr><th>Name</th><th>Destination</th>{#if shared}<th>Owner</th>{/if}<th><span class="cn-visually-hidden">Actions</span></th></tr>
     </thead>
     <tbody>
       {#each links as link (link.slug)}

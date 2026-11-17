@@ -1,5 +1,5 @@
 /* Primitives shared by many components: field labels and hints, the text-control box (inputs,
-   selects, search), and kbd keys. */
+   selects, search), visually hidden text, and kbd keys. */
 @layer components {
   .cn-label { font: var(--type-label); color: var(--ink-muted); }
   .cn-hint { font: var(--type-small); color: var(--ink-muted); }
@@ -18,6 +18,12 @@
   .cn-control[aria-invalid="true"] { border-color: var(--clay); }
   .cn-control.is-mono { font-family: var(--font-mono); font-size: 13px; }
   select.cn-control { padding-right: var(--space-2); }
+
+  /* Read by screen readers, not shown. */
+  .cn-visually-hidden {
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
+    overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
 
   .cn-kbd {
     display: inline-block; min-width: 18px; padding: 1px 5px; text-align: center;
