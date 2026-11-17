@@ -11,11 +11,16 @@ import {
   validateUrl,
 } from "./links";
 import type { Env, Link, User } from "./types";
+import { metricsUrl } from "./otel";
 import { revokeToken, revokeTokensFor } from "./tokens";
 import { bearerToken, json, linkPrefix } from "./util";
 
 const canEdit = (user: User, link: Link) => user.isAdmin || link.owner === user.email;
-const present = (user: User, link: Link) => ({ ...link, can_edit: canEdit(user, link) });
+const present = (env: Env, user: User, link: Link) => ({
+  ...link,
+  can_edit: canEdit(user, link),
+  metrics_url: metricsUrl(env, link.slug),
+});
 
 /**
  * CSRF defence for cookie-authenticated writes. The custom header cannot be sent cross-origin
@@ -78,7 +83,7 @@ export async function handleApi(req: Request, env: Env, user: User, path: string
           owner: p.get("owner") === "me" ? user.email : undefined,
           limit: Number(p.get("limit")) || undefined,
         });
-        return json({ links: links.map((l) => present(user, l)) });
+        return json({ links: links.map((l) => present(env, user, l)) });
       }
       if (req.method === "POST") {
         const b = await body(req);
@@ -90,7 +95,7 @@ export async function handleApi(req: Request, env: Env, user: User, path: string
           owner: user.email,
         });
         if (!link) return json({ error: `${prefix}/${slug} already exists.` }, 409);
-        return json(present(user, link), 201);
+        return json(present(env, user, link), 201);
       }
     }
 
@@ -99,7 +104,7 @@ export async function handleApi(req: Request, env: Env, user: User, path: string
       const slug = normalizeSlug(decodeURIComponent(m[1]!));
       const link = await getLink(env, slug);
       if (!link) return json({ error: `${prefix}/${slug} does not exist.` }, 404);
-      if (!write) return json(present(user, link));
+      if (!write) return json(present(env, user, link));
       if (!canEdit(user, link)) return json({ error: `Only ${link.owner} or an admin can change ${prefix}/${slug}.` }, 403);
 
       if (req.method === "PUT") {
@@ -109,7 +114,7 @@ export async function handleApi(req: Request, env: Env, user: User, path: string
           description: b.description === undefined ? link.description : validateDescription(b.description),
           owner: b.owner === undefined ? link.owner : validateOwner(b.owner),
         });
-        return json(present(user, updated!));
+        return json(present(env, user, updated!));
       }
       if (req.method === "DELETE") {
         await deleteLink(env, slug);

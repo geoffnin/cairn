@@ -248,7 +248,8 @@ it access to the server's origin.
 
 ## D10. Count clicks in D1, off the request path
 
-**Date:** 2026-11-17 · **Status:** accepted
+**Date:** 2026-11-17 · **Status:** accepted; extended by D16 (the same count is also emitted as
+an OpenTelemetry metric)
 
 **Decision.** Each redirect increments `clicks` and sets `last_clicked_at` inside
 `ctx.waitUntil`, after the response is sent.
@@ -406,6 +407,87 @@ server. So redirects and the website work without the web session cookie.
 **Found during testing.** A consent page served with `Referrer-Policy: no-referrer` makes
 Chrome send `Origin: null` on its own form post, which the origin check then rejects. The page
 uses `same-origin`.
+
+---
+
+## D16. Emit clicks as an OpenTelemetry metric; link out to a dashboard
+
+**Date:** 2026-11-17 · **Status:** accepted · **Extends:** D10
+
+**Context.** Click counts should be an OpenTelemetry metric, and "see metrics" for a link
+should open a configured dashboard. Two questions were open: can Cloudflare do this in-product,
+and how deeply can a metrics platform be integrated back into Cairn.
+
+**What was checked.**
+
+- *Cloudflare's built-in OpenTelemetry export* sends Worker traces and logs to any OTLP
+  endpoint, but not custom metrics; Cloudflare's docs say metrics export is not available yet.
+  So it cannot carry a click counter today.
+- *Workers Analytics Engine* is Cloudflare's in-product collector for custom data points
+  (`writeDataPoint`, a SQL API, a free allowance of about 100k points a day). It has no
+  dashboards of its own to share with a team; the documented route is to query it from Grafana.
+  It is also not OpenTelemetry, so it would not satisfy the request by itself.
+- *OTLP platforms* (Grafana Cloud, Datadog, New Relic, Honeycomb, Dynatrace) all accept
+  OTLP/HTTP directly, but disagree on how counters must be reported. Prometheus-based backends
+  such as Grafana Cloud expect cumulative totals. Dynatrace accepts only deltas. Datadog and
+  New Relic take either and prefer deltas.
+
+**Decision.**
+
+1. When an OTLP endpoint is configured, every redirect sends one data point for the metric
+   `cairn.link.clicks` (a monotonic sum, attribute `link.slug`, resource `service.name`)
+   straight from the Worker, after the response, in `ctx.waitUntil`.
+2. Configuration uses the standard OpenTelemetry variable names
+   (`OTEL_EXPORTER_OTLP_ENDPOINT`, `..._HEADERS`, `..._METRICS_TEMPORALITY_PREFERENCE`,
+   `OTEL_SERVICE_NAME`), so vendor setup guides apply as written.
+3. Both temporalities are supported. **Cumulative is the default**, as in the OpenTelemetry
+   SDKs. The value is the link's running total from D1 (`UPDATE ... RETURNING clicks`), with the
+   link's creation time as the start time. `delta` sends a `1` per click.
+4. `METRICS_DASHBOARD_URL` is a URL template; `{slug}` is replaced with the link name. When
+   set, the usage count in the UI becomes a link to that dashboard, and the API returns it as
+   `metrics_url` on every link.
+5. The D1 counter stays. It is what the UI shows without any metrics platform, and it is what
+   makes cumulative reporting possible.
+
+**Why these choices.**
+
+- *Why the D1 total matters for cumulative.* A Worker has no memory between requests and runs
+  as many isolates at once, so it cannot keep a running total itself. Most serverless code can
+  therefore only send deltas, which Prometheus-style backends reject without a collector in
+  between. Because D1 already holds one authoritative count per link, Cairn can report a true
+  cumulative value from any isolate and work with Grafana Cloud directly.
+- *Why hand-written protobuf.* Binary protobuf is the one encoding every OTLP receiver must
+  accept; JSON is optional and not accepted everywhere. The message has a fixed shape, so about
+  40 lines of encoder avoid a protobuf dependency (D11). The output was decoded with the
+  official `opentelemetry-proto` package and is pinned by a byte-for-byte test.
+- *Why one request per click rather than batching.* Buffering in memory would lose counts
+  whenever an isolate is recycled. One small request per click, off the response path, is exact
+  and simple. At very high volume, point the endpoint at an OpenTelemetry Collector and batch
+  there.
+- *Why a link out rather than charts inside Cairn.* Every platform can be reached by a URL with
+  a variable in it; that is the only integration that works for all of them. See "Deeper
+  integration" below.
+
+**Limits.**
+
+- A failed export is logged and dropped; there is no retry. In cumulative mode the next click
+  carries the correct total, so nothing is lost. In delta mode that click is missing from the
+  platform (D1 still has it).
+- In cumulative mode, two clicks on the same link in the same instant can arrive out of order;
+  backends drop the older sample and the total remains right.
+- One time series per link. A few thousand links is well within any platform's limits.
+- The D1 write per redirect, and with it the free-tier ceiling in D10, remains.
+
+**Deeper integration, not built.**
+
+- *Embedding charts in the Cairn UI.* Possible per vendor (Grafana panel embeds or public
+  dashboards, Datadog embeddable graphs), each with its own auth and iframe rules, and it would
+  mean relaxing Cairn's Content-Security-Policy for that vendor.
+- *Reading numbers back* (for example a 30-day sparkline) needs each vendor's query API and a
+  read credential on the Worker. There is no vendor-neutral query standard to build against.
+- *Analytics Engine as a second sink* would give time series with no outside account, queried
+  through Cloudflare's SQL API. Worth adding if someone wants history without a metrics
+  platform.
 
 ---
 

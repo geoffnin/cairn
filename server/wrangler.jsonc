@@ -55,6 +55,18 @@
     "LINK_PREFIX": "go",
 
     // How long the browser extension stays signed in after its one-time sign-in.
-    "EXTENSION_TOKEN_TTL_DAYS": "30"
+    "EXTENSION_TOKEN_TTL_DAYS": "30",
+
+    // --- link metrics (optional) ---
+    // Send each click as the OpenTelemetry metric "cairn.link.clicks" (attribute: link.slug)
+    // to any OTLP/HTTP endpoint. Standard OpenTelemetry variable names.
+    "OTEL_EXPORTER_OTLP_ENDPOINT": "",   // base URL; "/v1/metrics" is appended
+    "OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE": "cumulative", // or "delta" (Datadog, Dynatrace, New Relic)
+    "OTEL_SERVICE_NAME": "cairn",
+    // secret: OTEL_EXPORTER_OTLP_HEADERS, e.g. "Authorization=Basic abc123"  (wrangler secret put ...)
+
+    // Where the usage count in the UI links to. {slug} is replaced with the link's name, e.g.
+    // https://your-stack.grafana.net/d/abc123/cairn-links?var-slug={slug}
+    "METRICS_DASHBOARD_URL": ""
   }
 }

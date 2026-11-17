@@ -2,6 +2,7 @@
 //   L1  per-isolate memory, 30s TTL   - free, absorbs bursts
 //   L2  Workers KV, written through   - edge-local reads, no D1 round trip
 //   L3  D1                            - source of truth
+import { exportClick, otelCumulative, otelEnabled } from "./otel";
 import type { Env, Link } from "./types";
 import { nowSeconds } from "./util";
 
@@ -109,12 +110,28 @@ export async function lookupTarget(env: Env, ctx: ExecutionContext, slug: string
   return url;
 }
 
+/**
+ * Counts a click, after the response has gone out. The running total lives in D1 (it is what
+ * the UI shows, and what makes a truthful cumulative metric possible from a stateless Worker);
+ * each click is also emitted as an OpenTelemetry data point when an OTLP endpoint is configured.
+ */
 export function recordClick(env: Env, ctx: ExecutionContext, slug: string): void {
   ctx.waitUntil(
-    env.DB.prepare("UPDATE links SET clicks = clicks + 1, last_clicked_at = ? WHERE slug = ?")
-      .bind(nowSeconds(), slug)
-      .run()
-      .catch((e) => console.warn("click count failed", slug, e)),
+    (async () => {
+      const now = Date.now();
+      const row = await env.DB.prepare(
+        "UPDATE links SET clicks = clicks + 1, last_clicked_at = ? WHERE slug = ? RETURNING clicks, created_at",
+      )
+        .bind(Math.floor(now / 1000), slug)
+        .first<{ clicks: number; created_at: number }>();
+      if (!row || !otelEnabled(env)) return; // no row: the link was deleted moments ago
+      await exportClick(
+        env,
+        otelCumulative(env)
+          ? { slug, value: row.clicks, startMs: row.created_at * 1000, timeMs: now }
+          : { slug, value: 1, startMs: now - 1, timeMs: now },
+      );
+    })().catch((e) => console.warn("click count failed", slug, e)),
   );
 }
 
