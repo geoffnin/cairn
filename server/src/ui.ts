@@ -128,12 +128,18 @@ const $ = (id) => document.getElementById(id);
 const P = '__PREFIX__/';
 
 async function api(method, path, body) {
-  const res = await fetch('/_/api' + path, {
-    method,
-    headers: { 'content-type': 'application/json', 'x-cairn-request': '1' },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (res.status === 401) { location.href = '/_/auth/login?rd=' + encodeURIComponent(location.pathname + location.search); throw new Error('Signing in…'); }
+  let res;
+  try {
+    res = await fetch('/_/api' + path, {
+      method,
+      headers: { 'content-type': 'application/json', 'x-cairn-request': '1' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    // Cloudflare Access answers an expired session with a redirect to its login page, which
+    // fetch cannot follow across origins.
+    throw new Error('Your sign-in has expired. Reload the page to sign in again.');
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || 'Request failed (' + res.status + ')');
   return data;

@@ -14,8 +14,9 @@ export const CREATE_EVENT = "cairn.link.create";
 export const UPDATE_EVENT = "cairn.link.update";
 export const DELETE_EVENT = "cairn.link.delete";
 
+/** API writes from the extension's popup carry its chrome-extension:// origin. */
 const clientKind = (req: Request): "extension" | "browser" =>
-  /^Bearer\s/i.test(req.headers.get("authorization") ?? "") ? "extension" : "browser";
+  (req.headers.get("origin") ?? "").startsWith("chrome-extension://") ? "extension" : "browser";
 
 function hostOf(url: string): string | undefined {
   try {
@@ -40,8 +41,6 @@ export interface ClickEvent {
   "link.target_host"?: string;
   /** Whether text after the name was passed through (go/bug/ABC-12). */
   "link.passthrough": boolean;
-  /** "extension" when the browser extension's sign-in was used, otherwise "browser". */
-  "client.kind": "extension" | "browser";
   /** Two-letter country of the visitor, from Cloudflare. */
   "client.country"?: string;
 }
@@ -58,7 +57,6 @@ export function clickEvent(
     "link.slug": slug,
     "link.found": found,
     "link.passthrough": passthrough,
-    "client.kind": clientKind(req),
   };
   const host = destination ? hostOf(destination) : undefined;
   if (host) event["link.target_host"] = host;
@@ -98,6 +96,7 @@ export interface LinkChangeEvent {
   "user.email": string;
   /** True when an admin changed someone else's link. */
   "user.admin_override": boolean;
+  /** "extension" when made from the extension's popup, otherwise "browser". */
   "client.kind": "extension" | "browser";
 }
 

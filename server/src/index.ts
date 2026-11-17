@@ -1,7 +1,6 @@
 import { handleApi } from "./api";
-import { AuthError, authenticate, handleCallback, handleLogin, handleLogout, mode } from "./auth";
+import { AuthError, authenticate, handleLogout, mode } from "./auth";
 import { clickEvent, logEvent } from "./events";
-import { handleExtensionConnect, handleExtensionDone, handleExtensionToken } from "./extauth";
 import { lookupTarget, resolveTarget } from "./links";
 import type { Env } from "./types";
 import { renderUi } from "./ui";
@@ -15,26 +14,16 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
   if (path === "/_/healthz") return new Response("ok");
   if (path === "/robots.txt") return new Response("User-agent: *\nDisallow: /\n");
   if (path === "/favicon.ico") return new Response(null, { status: 204 });
-  // Public, so the extension can learn the prefix and sign-in method before anyone is signed in.
+  // Meant to be public, so the extension can learn the prefix before anyone signs in. Behind
+  // Access that needs a Bypass policy for this path; see the README.
   if (path === "/_/config") {
     return json({ name: "Cairn", prefix: linkPrefix(env), auth: mode(env) }, 200, { "access-control-allow-origin": "*" });
   }
-  if (path === "/_/auth/extension/token") return handleExtensionToken(req, env);
-  if (path === "/_/auth/extension/done") return handleExtensionDone();
-  if (path === "/_/auth/login") return handleLogin(req, env);
-  if (path === "/_/auth/callback") return handleCallback(req, env);
   if (path === "/_/auth/logout") return handleLogout(req, env);
 
-  const isApi = path.startsWith("/_/api/");
   const user = await authenticate(req, env);
-  if (!user) {
-    if (isApi) return json({ error: "Not signed in.", login: "/_/auth/login" }, 401);
-    return redirect(`/_/auth/login?rd=${encodeURIComponent(path + url.search)}`);
-  }
-
-  if (isApi) return handleApi(req, env, user, path.slice("/_/api".length));
+  if (path.startsWith("/_/api/")) return handleApi(req, env, user, path.slice("/_/api".length));
   if (path === "/" || path === "/_") return redirect("/_/");
-  if (path === "/_/auth/extension") return handleExtensionConnect(req, env, user);
   if (path === "/_/") return renderUi(linkPrefix(env));
   if (path.startsWith("/_/")) return new Response("Not found", { status: 404 });
 
@@ -66,7 +55,10 @@ export default {
     try {
       return await route(req, env, ctx);
     } catch (e) {
-      if (e instanceof AuthError) return new Response(e.message, { status: e.status, headers: { "cache-control": "no-store" } });
+      if (e instanceof AuthError) {
+        if (new URL(req.url).pathname.startsWith("/_/api/")) return json({ error: e.message }, e.status);
+        return new Response(e.message, { status: e.status, headers: { "cache-control": "no-store" } });
+      }
       console.error(e);
       return new Response("Internal error", { status: 500 });
     }

@@ -12,8 +12,7 @@ import {
 } from "./links";
 import type { Env, Link, User } from "./types";
 import { linkCreated, linkDeleted, linkUpdated, logEvent, metricsUrl } from "./events";
-import { revokeToken, revokeTokensFor } from "./tokens";
-import { bearerToken, json, linkPrefix } from "./util";
+import { json, linkPrefix } from "./util";
 
 const canEdit = (user: User, link: Link) => user.isAdmin || link.owner === user.email;
 const present = (env: Env, user: User, link: Link) => ({
@@ -61,19 +60,6 @@ export async function handleApi(req: Request, env: Env, user: User, path: string
   const prefix = linkPrefix(env);
   try {
     if (path === "/me" && !write) return json(user);
-
-    // Sign the calling extension out (revokes the bearer token it presented).
-    if (path === "/tokens/current" && req.method === "DELETE") {
-      const token = bearerToken(req);
-      if (token) await revokeToken(env, token);
-      return json({ ok: true });
-    }
-    // Revoke every extension sign-in for yourself, or (admins) for ?email=someone.
-    if (path === "/tokens" && req.method === "DELETE") {
-      const email = (new URL(req.url).searchParams.get("email") || user.email).trim().toLowerCase();
-      if (email !== user.email && !user.isAdmin) return json({ error: "Only admins can sign other people out." }, 403);
-      return json({ ok: true, revoked: await revokeTokensFor(env, email) });
-    }
 
     if (path === "/links") {
       if (!write) {

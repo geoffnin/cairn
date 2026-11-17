@@ -46,29 +46,6 @@ export function redirect(location: string, headers: [string, string][] = []): Re
   return new Response(null, { status: 302, headers: h });
 }
 
-export function getCookie(req: Request, name: string): string | null {
-  for (const part of (req.headers.get("cookie") ?? "").split(";")) {
-    const i = part.indexOf("=");
-    if (i > 0 && part.slice(0, i).trim() === name) return part.slice(i + 1).trim();
-  }
-  return null;
-}
-
-export function setCookie(req: Request, name: string, value: string, maxAge: number): string {
-  const secure = new URL(req.url).protocol === "https:" ? "; Secure" : "";
-  return `${name}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
-}
-
-/** Only allow same-site relative paths as post-login destinations (no open redirects). */
-export function safeReturnPath(rd: string | null): string {
-  return rd && /^\/(?![/\\])/.test(rd) ? rd : "/_/";
-}
-
-export function bearerToken(req: Request): string | null {
-  const m = /^Bearer\s+(\S+)$/i.exec(req.headers.get("authorization") ?? "");
-  return m ? m[1]! : null;
-}
-
 /**
  * The word people type before the slash ("go" in go/roadmap). It is used as a hostname by the
  * browser extension, so it must be a single DNS label.

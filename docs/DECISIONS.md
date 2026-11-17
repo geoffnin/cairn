@@ -92,7 +92,9 @@ cacheable as HTTP objects; caching the *data* is the right level.
 
 ## D4. Authenticate with OpenID Connect; use Cloudflare Access for SAML
 
-**Date:** 2026-11-17 · **Status:** accepted
+**Date:** 2026-11-17 · **Status:** superseded by D20. Cloudflare Access is now the only
+sign-in; the built-in OIDC flow was removed. The reasons for not implementing SAML in the
+Worker still hold.
 
 **Context.** The brief said to assume Okta but prefer something provider-agnostic, and
 mentioned SAML.
@@ -129,7 +131,8 @@ bridges it without us owning SAML code.
 
 ## D5. Stateless signed session cookie, 24 hours
 
-**Date:** 2026-11-17 · **Status:** accepted
+**Date:** 2026-11-17 · **Status:** superseded by D20. Cloudflare Access owns sessions; Cairn
+sets no cookies.
 
 **Decision.** After login the Worker sets an HMAC-SHA256-signed cookie (`HttpOnly`,
 `SameSite=Lax`, `Secure` on HTTPS) holding email, name and the group-admin flag. No session
@@ -167,9 +170,10 @@ switch.
 
 ## D7. The extension only rewrites `go/...`; the server owns identity
 
-**Date:** 2026-11-17 · **Status:** partly superseded by D13 (prefix), D14 (several servers) and
-D15 (the extension now holds a sign-in token). The redirect mechanism and permission model
-below still stand.
+**Date:** 2026-11-17 · **Status:** partly superseded by D13 (prefix) and D14 (several servers).
+D15 briefly gave the extension a sign-in token; D20 removed it, so "stores no credentials"
+holds again, with the Cloudflare Access session in place of Cairn's cookie. The redirect
+mechanism and permission model below still stand.
 
 **Decision.** The Chrome extension (Manifest V3) does three things:
 
@@ -294,7 +298,15 @@ The second round (D13 to D15) was tested the same way, plus a browser run agains
 OIDC provider covering: add a server, sign in once, clear all cookies and still resolve links,
 a custom prefix, switching between two servers, sign out and remove.
 
-**Not yet verified.** Chrome's permission prompt itself (the test build pre-granted the hosts,
+After D20 the server tests sign real RS256 tokens with a stand-in for the Access team's key
+(including key rotation, forged, unsigned, expired and wrong-audience tokens). The extension was
+run in Chromium against a local imitation of Access: a proxy that redirects signed-out requests
+to a login page on another site and sets a `SameSite=Lax` session cookie. It confirmed that the
+extension's own API calls, including the popup's create from its `chrome-extension://` origin,
+carry that cookie, and covered sign-in, sign-out and a missing `/_/config` bypass.
+
+**Not yet verified.** Real Cloudflare Access (its cookie settings, session duration and group
+claims), Chrome's permission prompt itself (the test build pre-granted the hosts,
 since headless Chrome cannot click the prompt), a deployment against a live Cloudflare account and a live Okta tenant, and
 how Chrome's address bar treats a typed `go/name` on first use (see README, "Using it").
 
@@ -350,8 +362,8 @@ controls. The user only signs in.
 
 ## D15. The extension signs in once and holds a revocable token
 
-**Date:** 2026-11-17 · **Status:** accepted · **Changes:** D7 ("stores no credentials") and the
-trade-off in D5
+**Date:** 2026-11-17 · **Status:** superseded by D20. The extension no longer has its own
+sign-in; it uses the browser's Cloudflare Access session.
 
 **Context.** With only the 24-hour web session (D5), people were bounced through the IdP daily
 and the extension had no sign-in of its own. The request was to authenticate once, when the
@@ -617,6 +629,62 @@ and a distinct `event.name` is the one field every platform can filter on cheapl
 
 **Not done.** These events are a log, not a restorable history: they cannot be used to undo a
 change. An in-app edit history remains under "Deferred".
+
+---
+
+## D20. Cloudflare all the way: Access is the only sign-in
+
+**Date:** 2026-11-17 · **Status:** accepted · **Supersedes:** D4, D5, D15
+
+**Context.** Cairn had two production sign-in modes: its own OIDC flow (with signed session
+cookies, and a token the extension obtained once) and Cloudflare Access. The project has
+committed to Cloudflare, so the provider-agnostic path is no longer worth its weight.
+
+**Decision.** Cloudflare Access in front of the hostname is the only production sign-in. The
+Worker verifies the `Cf-Access-Jwt-Assertion` header on every request and does nothing else
+about identity. Removed: the OIDC login and callback, session cookies, the extension sign-in
+flow and its tokens (migration `0004` drops the table), the token revocation API, and the
+`OIDC_*`, `SESSION_*` and `EXTENSION_TOKEN_TTL_DAYS` settings. `AUTH_MODE=dev` stays, for local
+development on localhost only. `workers_dev` and `preview_urls` are off, so the Worker is only
+reachable on the hostname Access protects.
+
+**Why.**
+
+- *Less security-critical code.* About 400 lines of sign-in, session and token handling (net) are
+  gone, along with every secret Cairn held. What remains is one token check.
+- *One place to manage access.* Who may use Cairn, which identity provider (SAML or OIDC), how
+  long sessions last, and revoking sessions all live in Zero Trust alongside the company's other
+  internal apps.
+- *Offboarding improves.* D15's 30-day extension tokens outlived removal from the identity
+  provider unless an admin revoked them. Access sessions can be revoked centrally and last at
+  most as long as the application's session duration.
+
+**"Authenticate once" is now Access's session.** The extension holds no token. Redirects are
+ordinary page loads that carry the Access cookie, and the extension's own API calls send it too
+(tested against a local imitation of Access; see D12). Set the Access application's session
+duration to decide how often people sign in again; the maximum is one month. When a session
+expires, the next link visit goes through the identity provider and back, usually without a
+prompt if the provider's own session is still alive.
+
+**Consequences.**
+
+- *`/_/config` needs a Bypass policy.* The extension reads the prefix before anyone has signed
+  in. Behind Access that request is redirected to the login page, so the README asks for a
+  separate path-scoped Access application with a Bypass policy for `/_/config`. Without it, the
+  extension tells people to sign in to the server in a tab first, which also works.
+- *Group-based admins depend on Access configuration.* Access tokens only carry groups if the
+  identity provider in Zero Trust is set to pass them as a custom claim. Cairn reads `groups`
+  at the top level or under `custom`; which one a real Access setup produces was not confirmed.
+  `ADMIN_EMAILS` does not depend on it.
+- *Clicks no longer say whether the extension was used.* That came from the extension's token.
+  Link changes still do, from the popup's `chrome-extension://` origin.
+- *Service tokens are refused.* Access service tokens carry no email, and every Cairn action is
+  tied to a person.
+- *Moving off Cloudflare later* would mean reintroducing a sign-in. The removed code is in git
+  history (D4, D5, D15).
+
+**On user IDs** (open from the discussion of D19): in this setup the stable ID available is
+Access's own `sub` for the person, not the identity provider's. Events still carry emails.
 
 ---
 

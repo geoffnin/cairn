@@ -1,10 +1,11 @@
 # Cairn
 
-Self-hosted go links for your company: type `go/roadmap` in the address bar and land on the
-right page. Cairn is two pieces:
+Self-hosted go links for your company, built entirely on Cloudflare: type `go/roadmap` in the
+address bar and land on the right page. Cairn is two pieces:
 
-- **`server/`** — a Cloudflare Worker where people sign in with your identity provider and
-  create, search and share links. Stores links in D1, caches redirects in KV.
+- **`server/`** — a Cloudflare Worker where people create, search and share links. Cloudflare
+  Access signs people in with your identity provider (Okta, Entra ID, Google, any SAML or OIDC
+  provider). Links live in D1, redirects are cached in KV, and usage goes to Workers Logs.
 - **`extension/`** — a Chrome extension that makes `go/name` work in the address bar, with no
   DNS or hosts-file changes.
 
@@ -18,7 +19,7 @@ The reasoning behind each choice is in [docs/DECISIONS.md](docs/DECISIONS.md).
         │  extension rewrites the URL (before DNS)
         ▼
  https://go.example.com/roadmap ──► Worker
-                                     ├─ signed in?  no ─► your IdP (OIDC) ─► back
+         Cloudflare Access ─ signed in?  no ─► your IdP ─► back
                                      ├─ memory cache ─► KV ─► D1
                                      └─ 302 to the destination
 ```
@@ -43,55 +44,58 @@ npx wrangler d1 create cairn             # copy database_id into wrangler.jsonc
 npx wrangler kv namespace create CACHE   # copy id into wrangler.jsonc
 ```
 
-In `wrangler.jsonc`, paste the two IDs, uncomment `routes` with your hostname, and fill in the
-auth settings for one of the two modes below. Then:
+In `wrangler.jsonc`, paste the two IDs and uncomment `routes` with your hostname. Then:
 
 ```sh
 npm run migrate:remote
-npx wrangler secret put SESSION_SECRET   # paste the output of: openssl rand -base64 48
 npm run deploy
 ```
 
-### Sign-in option A: OpenID Connect (default)
+The Worker refuses every request until Cloudflare Access is in front of it, so set that up next.
 
-Works with any OIDC provider. For **Okta**:
+### Put Cloudflare Access in front
 
-1. Admin console → Applications → Create App Integration → **OIDC – Web Application**.
-2. Sign-in redirect URI: `https://go.example.com/_/auth/callback`. Grant type: Authorization
-   Code. Assign the people or groups who should have access.
-3. Set in `wrangler.jsonc`:
-   - `OIDC_ISSUER`: `https://your-org.okta.com` (or your custom authorization server's issuer)
-   - `OIDC_CLIENT_ID`: the app's client ID
-4. `npx wrangler secret put OIDC_CLIENT_SECRET`
+Access is part of Cloudflare Zero Trust, which has a free tier for small teams (check current
+pricing for your headcount). In the Cloudflare dashboard, under **Zero Trust**:
 
-For Entra ID, Google Workspace, Keycloak and others the steps are the same: register a web app
-with that redirect URI and set the issuer (the URL that serves
-`/.well-known/openid-configuration`), client ID and secret.
+1. **Connect your identity provider** under Settings → Authentication. For Okta, add Okta (or
+   any SAML/OIDC provider) and follow the steps shown there. Skip this to start with the
+   built-in one-time PIN, which emails a code.
+2. **Create the application:** Access → Applications → Add an application → **Self-hosted**.
+   Use your hostname (`go.example.com`) with no path. Add an **Allow** policy, for example
+   "emails ending in `@example.com`" or "members of the Engineering group".
+3. **Set the session duration** on the application. This is how often people sign in again;
+   the maximum is one month.
+4. **Let the extension read the prefix:** add a second self-hosted application for
+   `go.example.com/_/config` with a single **Bypass** policy for Everyone. That endpoint only
+   reveals the link prefix. Without it, people must sign in to the server in a tab before the
+   extension can add it.
+5. **Copy the application's AUD tag** (Application Audience, on the first application's
+   overview) and your team domain (`your-team.cloudflareaccess.com`) into `wrangler.jsonc` as
+   `ACCESS_AUD` and `ACCESS_TEAM_DOMAIN`, then `npm run deploy` again.
 
-### Sign-in option B: Cloudflare Access (use this for SAML)
+Cairn checks the signed token Access attaches to every request, so a request that somehow skips
+Access is refused. `workers_dev` and `preview_urls` are turned off in `wrangler.jsonc` for the
+same reason.
 
-If your IdP is SAML-only, or you already use Cloudflare Zero Trust, put an Access application in
-front of the hostname and let Access handle login. Set `AUTH_MODE` to `access`,
-`ACCESS_TEAM_DOMAIN` to `your-team.cloudflareaccess.com` and `ACCESS_AUD` to the application's
-AUD tag. No client secret or session secret is needed.
+**Admins by group:** `ADMIN_GROUPS` only works if your identity provider in Zero Trust is set to
+pass group membership into the Access token (as an OIDC claim or SAML attribute named
+`groups`). `ADMIN_EMAILS` always works.
 
 ### Settings
 
 | Variable | Purpose |
 |---|---|
-| `AUTH_MODE` | `oidc` (default), `access`, or `dev` (localhost only) |
-| `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`* | OIDC provider |
-| `OIDC_SCOPES` | Default `openid email profile`. Add `groups` if you use `ADMIN_GROUPS` with Okta |
-| `SESSION_SECRET`* | Signs session cookies; 32+ characters. Rotating it signs everyone out |
-| `SESSION_TTL_HOURS` | Session lifetime, default 24 |
-| `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` | Cloudflare Access mode |
+| `ACCESS_TEAM_DOMAIN` | Your Zero Trust team domain, e.g. `your-team.cloudflareaccess.com` |
+| `ACCESS_AUD` | The Access application's AUD tag |
+| `AUTH_MODE` | `access` (default), or `dev` for `wrangler dev` on localhost |
 | `ADMIN_EMAILS` | Comma-separated emails who can edit any link |
-| `ADMIN_GROUPS` | Comma-separated group names, matched against the token's `groups` claim |
-| `ALLOWED_EMAIL_DOMAINS` | Only these email domains may sign in, e.g. `example.com,example.co.uk`. Checked at sign-in and on every request, so tightening it takes effect at once |
+| `ADMIN_GROUPS` | Comma-separated group names from the token's `groups` (see above) |
+| `ALLOWED_EMAIL_DOMAINS` | Only these email domains may use Cairn, e.g. `example.com,example.co.uk`, on top of the Access policy. Checked on every request |
 | `LINK_PREFIX` | The word before the slash, default `go`. Letters, digits and hyphens |
-| `EXTENSION_TOKEN_TTL_DAYS` | How long the extension stays signed in, default 30 |
+| `METRICS_DASHBOARD_URL` | Where each link's Metrics link goes (see below) |
 
-\* secrets: set with `wrangler secret put`, never in `wrangler.jsonc`.
+No secrets are needed: Cairn holds no passwords, client secrets or signing keys.
 
 ## Link metrics (optional)
 
@@ -158,18 +162,19 @@ pricing. Keep `head_sampling_rate` at `1`, or counts will be sampled. The reason
 **Try it:** open `chrome://extensions`, turn on Developer mode, choose **Load unpacked** and pick
 the `extension/` folder. The settings page opens.
 
-1. Enter your server URL and choose **Add and sign in**.
+1. Enter your server URL and choose **Add server**.
 2. Allow the permission Chrome asks for (access to your server, and to your prefix if it is not
    `go`).
-3. A tab opens: sign in with your company account if asked, then choose **Connect**. The tab
-   closes and you are done. You will not be asked again for 30 days.
+3. If you are not signed in yet, a tab opens on the server and Cloudflare Access asks you to sign
+   in with your company account. After that, links, the toolbar popup and address-bar search
+   all use that sign-in until the Access session expires.
 
 You can add more than one server (say, staging and production) and pick which one is in use
 from the settings page or the toolbar popup. Only the selected server's prefix redirects.
 
 **Roll it out:** zip the `extension/` folder and publish it (unlisted or private) on the Chrome
 Web Store, then force-install it by policy. Set the server URL for everyone with a managed
-storage policy; people then only sign in once:
+storage policy; people then only need to sign in:
 
 ```json
 {
@@ -202,11 +207,12 @@ npm test                         # runs in the Workers runtime with local D1 and
 npm run typecheck
 ```
 
-Point the extension at `http://localhost:8787` to test the two together.
+Cloudflare Access does not run locally, so `dev` mode signs you in as a fixed user, and only on
+localhost. Point the extension at `http://localhost:8787` to test the two together.
 
 ### API
 
-All routes need a signed-in session. Writes need the header `X-Cairn-Request: 1`.
+All routes need a Cloudflare Access session. Writes need the header `X-Cairn-Request: 1`.
 
 | Method and path | |
 |---|---|
@@ -216,18 +222,21 @@ All routes need a signed-in session. Writes need the header `X-Cairn-Request: 1`
 | `GET /_/api/links/:slug` | Read |
 | `PUT /_/api/links/:slug` | Update any of `{ url, description, owner }` |
 | `DELETE /_/api/links/:slug` | Delete |
-| `DELETE /_/api/tokens` | Sign your extension out everywhere. Admins: add `?email=` to sign someone else out |
-| `GET /_/config` | Public: `{ prefix, auth }`, read by the extension |
+| `GET /_/config` | `{ prefix, auth }`, read by the extension. Bypass Access for this path |
 
 ## Good to know
 
 - **Edits take up to a minute to reach everyone.** Redirects are cached in memory (30 seconds)
   and in KV (which takes up to about 60 seconds to propagate worldwide).
-- **Offboarding needs one extra step.** Extension sign-ins last 30 days. When someone leaves,
-  an admin should call `DELETE /_/api/tokens?email=them@example.com`, or they keep working links
-  until the sign-in expires. Web sessions last 24 hours and cannot be revoked one by one.
-- **The website's "Sign out" does not sign the extension out.** Use Sign out in the extension's
-  settings.
+- **Offboarding is done in Zero Trust.** Removing someone from your identity provider stops new
+  sign-ins. To end sessions that are already open, revoke the person's sessions from their
+  entry in the Zero Trust users list. Otherwise they last until the Access session duration runs out.
+- **Signing out** of Cairn signs you out of Cloudflare Access for that application, which also
+  signs the extension out.
+- **Upgrading from an earlier version?** Cairn's own sign-in (OIDC, session cookies, extension
+  tokens) has been removed. Set up Access before deploying, and remove the old
+  `SESSION_SECRET` and `OIDC_CLIENT_SECRET` secrets with `wrangler secret delete`. Migration
+  `0004` drops the extension token table.
 - **Cairn does not count clicks itself.** Usage lives only in your metrics platform, reached
   through the Metrics link. Without a log destination, the events are still searchable in
   Workers Logs in the Cloudflare dashboard. Redirects write nothing to D1.
@@ -239,9 +248,10 @@ All routes need a signed-in session. Writes need the header `X-Cairn-Request: 1`
   OpenTelemetry log record. Whether the fields arrive as separate attributes or as a JSON body
   your platform must parse was not confirmed against a live destination. Send one click and
   look at the record before building a dashboard.
-- **Not yet proven against live services.** The test suite uses a fake identity provider and
-  local D1/KV. It has not yet been deployed to a real Cloudflare account, signed in through a
-  real Okta tenant, or forwarded logs to a real OTLP platform.
+- **Not yet proven against live services.** The tests sign real tokens with a stand-in Access
+  key, and the extension was tested against a local imitation of Access. Nothing has been
+  deployed to a real Cloudflare account behind real Access, or forwarded logs to a real
+  platform.
 
 ## License
 

@@ -26,13 +26,13 @@ $("browse").onclick = async (e) => {
 
 $("form").onsubmit = async (e) => {
   e.preventDefault();
-  const { active, token } = await state;
+  const { active } = await state;
   if (!active) return;
   if (!(await hasServerAccess(active))) return continueOnSite(active);
   $("submit").disabled = true;
   say("");
   try {
-    const link = await api(active, token, "POST", "/links", {
+    const link = await api(active, "POST", "/links", {
       slug: $("slug").value,
       url: $("url").value,
       description: $("desc").value,
@@ -42,7 +42,8 @@ $("form").onsubmit = async (e) => {
     say(`Created ${short} and copied it to the clipboard.`);
     $("slug").value = $("url").value = $("desc").value = "";
   } catch (err) {
-    // 401 = signed out; no status = network/CORS failure. Either way the site can take over.
+    // Signed out of Access, or the server is unreachable: the website can take over (and its
+    // page load lets Access sign the person in).
     if (err.status === 401 || err.status === undefined) return continueOnSite(active);
     say(err.message, true);
   } finally {

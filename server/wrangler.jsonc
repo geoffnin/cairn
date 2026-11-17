@@ -4,6 +4,12 @@
   "name": "cairn",
   "main": "src/index.ts",
   "compatibility_date": "2026-11-01",
+
+  // Only serve on your own hostname, behind Cloudflare Access. The workers.dev and preview URLs
+  // would not be behind Access; Cairn would refuse those requests anyway, but there is no reason
+  // to expose them.
+  "workers_dev": false,
+  "preview_urls": false,
   // Logs, including one "cairn.link.click" event per visit (see src/events.ts).
   // To send them to Grafana, Datadog, Honeycomb, New Relic, Sentry or any OTLP logs endpoint,
   // create a destination in the Cloudflare dashboard and list its name under "destinations".
@@ -40,38 +46,25 @@
   ],
 
   "vars": {
-    // "oidc"   - built-in OpenID Connect login (Okta, Entra ID, Google, Keycloak, ...)
-    // "access" - trust Cloudflare Access in front of the Worker (use this for SAML IdPs)
-    // "dev"    - no login; only honoured on localhost
-    "AUTH_MODE": "oidc",
-
-    // --- AUTH_MODE=oidc ---
-    "OIDC_ISSUER": "",          // e.g. https://your-org.okta.com
-    "OIDC_CLIENT_ID": "",
-    "OIDC_SCOPES": "openid email profile",
-    // secrets: OIDC_CLIENT_SECRET, SESSION_SECRET  (wrangler secret put ...)
-
-    // --- AUTH_MODE=access ---
-    "ACCESS_TEAM_DOMAIN": "",   // e.g. your-team.cloudflareaccess.com
-    "ACCESS_AUD": "",           // Application Audience (AUD) tag
+    // Sign-in is done by Cloudflare Access (see README, "Put Cloudflare Access in front").
+    "AUTH_MODE": "access",        // "dev" for `wrangler dev` on localhost only
+    "ACCESS_TEAM_DOMAIN": "",     // e.g. your-team.cloudflareaccess.com
+    "ACCESS_AUD": "",             // the Access application's Application Audience (AUD) tag
 
     // --- authorization ---
-    "ADMIN_EMAILS": "",          // comma separated; admins can edit/delete any link
-    "ADMIN_GROUPS": "",          // comma separated; matched against the `groups` claim
-    // Restrict sign-in to these email domains, e.g. "example.com,example.co.uk".
-    // Empty = anyone your IdP lets in. Checked at sign-in and again on every request.
+    "ADMIN_EMAILS": "",           // comma separated; admins can edit/delete any link
+    // Comma separated group names. Only works if your Access identity provider passes a
+    // "groups" claim into the Access token (Zero Trust > Settings > Authentication > your IdP).
+    "ADMIN_GROUPS": "",
+    // Restrict to these email domains, e.g. "example.com,example.co.uk". Empty = whoever the
+    // Access policy lets in. Checked on every request, on top of the Access policy.
     "ALLOWED_EMAIL_DOMAINS": "",
-
-    "SESSION_TTL_HOURS": "24",
 
     // The word typed before the slash: "go" gives go/roadmap. One DNS label (letters, digits, hyphens).
     "LINK_PREFIX": "go",
 
-    // How long the browser extension stays signed in after its one-time sign-in.
-    "EXTENSION_TOKEN_TTL_DAYS": "30",
-
     // --- link metrics (optional) ---
-    // Where the usage count in the UI links to, typically a dashboard built on the
+    // Where each link's "Metrics" link goes, typically a dashboard built on the
     // "cairn.link.click" log events. {slug} is replaced with the link's name, e.g.
     // https://your-stack.grafana.net/d/abc123/cairn-links?var-slug={slug}
     "METRICS_DASHBOARD_URL": ""

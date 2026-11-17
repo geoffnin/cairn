@@ -30,17 +30,16 @@ describe("click events", () => {
         "link.found": true,
         "link.target_host": "docs.test",
         "link.passthrough": false,
-        "client.kind": "browser",
       },
     ]);
   });
 
-  it("records pass-through, extension use, and never the full destination", async () => {
+  it("records pass-through, and never the full destination", async () => {
     await create("bug", "https://tracker.test/browse/{*}");
-    await call("/bug/ABC-12?token=x", { as: null, headers: { authorization: "Bearer cairn_nope" } }); // signed out: no event
+    await call("/bug/ABC-12?token=x", { as: null }); // not signed in: no event
     await call("/bug/ABC-12?token=x");
     const [e] = events() as Record<string, unknown>[];
-    expect(e).toMatchObject({ "link.passthrough": true, "link.target_host": "tracker.test", "client.kind": "browser" });
+    expect(e).toMatchObject({ "link.passthrough": true, "link.target_host": "tracker.test" });
     expect(JSON.stringify(logged)).not.toContain("ABC-12");
     expect(JSON.stringify(logged)).not.toContain("token=x");
   });
@@ -48,7 +47,7 @@ describe("click events", () => {
   it("logs misses, so you can see which names people expect to exist", async () => {
     await call("/nothing-here");
     expect(events()).toEqual([
-      { "event.name": "cairn.link.click", "link.slug": "nothing-here", "link.found": false, "link.passthrough": false, "client.kind": "browser" },
+      { "event.name": "cairn.link.click", "link.slug": "nothing-here", "link.found": false, "link.passthrough": false },
     ]);
   });
 
@@ -154,11 +153,8 @@ describe("link lifecycle events", () => {
     ]);
   });
 
-  it("marks changes made from the extension", async () => {
-    await env.DB.exec("DELETE FROM extension_tokens");
-    const { createToken } = await import("../src/tokens");
-    const { token } = await createToken(env, { email: "alice@example.com", name: "A", groupAdmin: false });
-    await call("/_/api/links", { method: "POST", body: { slug: "ext", url: "https://e.test/" }, as: null, headers: { authorization: `Bearer ${token}` } });
+  it("marks changes made from the extension's popup", async () => {
+    await call("/_/api/links", { method: "POST", body: { slug: "ext", url: "https://e.test/" }, headers: { origin: "chrome-extension://abcdef" } });
     expect(named("cairn.link.create")[0]).toMatchObject({ "client.kind": "extension" });
   });
 });

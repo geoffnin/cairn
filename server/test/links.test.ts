@@ -39,9 +39,10 @@ describe("redirects", () => {
     expect(res.headers.get("location")).toBe("/_/?new=nope");
   });
 
-  it("sends anonymous visitors to login and back", async () => {
+  it("refuses requests that did not come through Cloudflare Access", async () => {
     const res = await call("/docs/a?b=1", { as: null });
-    expect(res.headers.get("location")).toBe("/_/auth/login?rd=%2Fdocs%2Fa%3Fb%3D1");
+    expect(res.status).toBe(401);
+    expect(res.headers.get("location")).toBeNull();
   });
 
   it("serves from cache and invalidates on update and delete", async () => {

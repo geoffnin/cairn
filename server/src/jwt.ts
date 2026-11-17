@@ -52,6 +52,10 @@ export async function verifyJwt(token: string, opts: VerifyOptions): Promise<Rec
   return claims;
 }
 
+export function _seedJwks(jwksUrl: string, keys: Jwk[], ageSeconds = 0): void {
+  jwksCache.set(jwksUrl, { keys, fetchedAt: nowSeconds() - ageSeconds });
+}
+
 export function _resetJwksCache(): void {
   jwksCache.clear();
 }

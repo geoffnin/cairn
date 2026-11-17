@@ -10,10 +10,9 @@ export default defineConfig(async () => {
         miniflare: {
           bindings: {
             TEST_MIGRATIONS: migrations,
-            SESSION_SECRET: "test-session-secret-0123456789abcdef",
-            OIDC_ISSUER: "https://idp.test",
-            OIDC_CLIENT_ID: "cairn-client",
-            OIDC_CLIENT_SECRET: "shh",
+            AUTH_MODE: "access",
+            ACCESS_TEAM_DOMAIN: "team.cloudflareaccess.com",
+            ACCESS_AUD: "aud123",
             ADMIN_EMAILS: "admin@example.com",
             ADMIN_GROUPS: "golink-admins",
           },
