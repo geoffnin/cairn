@@ -1100,8 +1100,10 @@ for a year (`private, immutable`). `index.html` is `private, no-cache`.
 - *A build step.* `npm run build` at the root (CI does it). For the server, the build is
   Wrangler's own `build.command` (`scripts/build-ui.mjs`), so every `wrangler deploy` and
   `wrangler dev` builds the UI first, however it is started. That includes the Deploy to
-  Cloudflare button and a deploy command changed to plain `npx wrangler deploy`. The script
-  installs the root's tools first when a fresh checkout has none. A copy of the repository with
+  Cloudflare button and a deploy command changed to plain `npx wrangler deploy`. When a fresh
+  checkout has no tools, the script installs only the web build's (`npm ci --workspace web`:
+  Svelte and Vite, declared in `web/` and `extension/`), not the test tools declared at the root.
+  That is 74 MB instead of 136 MB. A copy of the repository with
   nothing installed and nothing built was checked this way with `wrangler deploy --dry-run`
   from `server/`. Node is pinned to 22 in `.node-version` (at the root and in `server/`, where
   the button's build starts), because Vite needs 22.12 or later.

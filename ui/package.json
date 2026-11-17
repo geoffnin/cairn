@@ -7,5 +7,8 @@
     "./components/*": "./src/components/*",
     "./lib/*": "./src/lib/*.ts",
     "./styles/*": "./src/styles/*"
+  },
+  "peerDependencies": {
+    "svelte": "^5.57.3"
   }
 }

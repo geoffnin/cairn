@@ -17,14 +17,11 @@
     "tokens": "node design/build-tokens.mjs"
   },
   "devDependencies": {
-    "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@testing-library/svelte": "^5.4.2",
     "@types/chrome": "^0.3.7",
     "jsdom": "^31.0.1",
-    "svelte": "^5.57.3",
     "svelte-check": "^4.7.8",
     "typescript": "^5.9.3",
-    "vite": "^8.3.8",
     "vitest": "^5.1.0"
   }
 }

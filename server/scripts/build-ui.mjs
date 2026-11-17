@@ -17,5 +17,6 @@ const npm = (...args) => {
   }
 };
 
-if (!existsSync(`${root}/node_modules/.bin/vite`)) npm("ci");
+// Only what the web build needs (web/ and ui/), not the test tools at the root.
+if (!existsSync(`${root}/node_modules/.bin/vite`)) npm("ci", "--workspace", "web");
 npm("run", "build", "-w", "web");
