@@ -248,7 +248,7 @@ once, or use the `go` + space form; Chrome then remembers it as an address.
 
 ## Develop
 
-The repository is an npm workspace: `ui/` (the design system's Svelte components), `web/` (the
+Use Node 22 (`.node-version`). The repository is an npm workspace: `ui/` (the design system's Svelte components), `web/` (the
 server's web UI) and `extension/`. `server/` is its own package, the Cloudflare Worker.
 
 ```sh
@@ -261,7 +261,8 @@ cd server
 npm ci
 cp .dev.vars.example .dev.vars   # AUTH_MODE=dev: signed in as dev@example.com on localhost
 npm run migrate:local
-npm run dev                      # builds the web UI, then http://localhost:8787
+npm run dev                      # http://localhost:8787; Wrangler builds the web UI first and
+                                 # rebuilds it when web/src or ui/src change
 npm test                         # builds the web UI, then runs in the Workers runtime
 npm run typecheck
 ```

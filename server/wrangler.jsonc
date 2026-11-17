@@ -4,9 +4,14 @@
   "name": "cairn",
   "main": "src/index.ts",
   "compatibility_date": "2026-11-01",
-  // The web UI: static files built from ../web (npm run build:ui) into ./public/_/. Every request
-  // still goes to the Worker first, so sign-in is checked before any of them is served
-  // (src/ui.ts); the Worker then hands the request to the assets binding.
+  // The web UI: static files built from ../web into ./public/_/. Wrangler runs the build before
+  // every deploy and `wrangler dev`, and rebuilds when the UI's source changes during dev.
+  "build": {
+    "command": "node scripts/build-ui.mjs",
+    "watch_dir": ["../web/src", "../ui/src"]
+  },
+  // Every request still goes to the Worker first, so sign-in is checked before any UI file is
+  // served (src/ui.ts); the Worker then hands the request to the assets binding.
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",

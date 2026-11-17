@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build:ui": "cd .. && npm run build -w web",
-    "dev": "npm run build:ui && wrangler dev",
+    "build:ui": "node scripts/build-ui.mjs",
+    "dev": "wrangler dev",
     "deploy": "node scripts/deploy.mjs",
     "migrate:local": "wrangler d1 migrations apply DB --local",
     "migrate:remote": "wrangler d1 migrations apply DB --remote",

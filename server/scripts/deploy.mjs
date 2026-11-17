@@ -7,9 +7,9 @@
 // Accepts one option, --dry-run (npm run deploy -- --dry-run): it builds and checks the Worker
 // with `wrangler deploy --dry-run` and touches nothing remote, migrations included. Any other
 // argument is refused before anything runs, rather than silently ignored.
+//
+// `wrangler deploy` builds the web UI first (build.command in wrangler.jsonc, scripts/build-ui.mjs).
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 
 const args = process.argv.slice(2);
 const unknown = args.filter((a) => a !== "--dry-run");
@@ -31,13 +31,6 @@ const fail = (step) => {
   console.error(`\n${step} failed; see the output above.`);
   process.exit(1);
 };
-
-// The web UI is static files built from ../web into public/_/, which the deploy uploads. Its
-// tools are installed at the repository root; the Deploy to Cloudflare button starts without them.
-const root = fileURLToPath(new URL("../..", import.meta.url));
-const npm = (...args) => spawnSync("npm", args, { cwd: root, stdio: "inherit" }).status === 0;
-if (!existsSync(`${root}/node_modules`) && !npm("ci")) fail("Installing the web UI's build tools");
-if (!npm("run", "build", "-w", "web")) fail("Building the web UI");
 
 if (dryRun) {
   console.log("Dry run: checking the build only. No migrations, no deploy.\n");

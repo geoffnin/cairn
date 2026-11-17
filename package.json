@@ -7,6 +7,9 @@
     "web",
     "extension"
   ],
+  "engines": {
+    "node": ">=22.12"
+  },
   "scripts": {
     "build": "npm run build -w web -w extension",
     "check": "node design/build-tokens.mjs --check && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",

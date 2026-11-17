@@ -1097,10 +1097,14 @@ for a year (`private, immutable`). `index.html` is `private, no-cache`.
 
 **Costs, accepted.**
 
-- *A build step.* `npm run build` at the root (CI does it). `npm run dev` and `npm test` in
-  `server/` build the web UI first. The deploy script installs the root's tools if they are
-  missing and builds the UI before `wrangler deploy`, so the Deploy to Cloudflare button keeps
-  working without extra steps.
+- *A build step.* `npm run build` at the root (CI does it). For the server, the build is
+  Wrangler's own `build.command` (`scripts/build-ui.mjs`), so every `wrangler deploy` and
+  `wrangler dev` builds the UI first, however it is started. That includes the Deploy to
+  Cloudflare button and a deploy command changed to plain `npx wrangler deploy`. The script
+  installs the root's tools first when a fresh checkout has none. A copy of the repository with
+  nothing installed and nothing built was checked this way with `wrangler deploy --dry-run`
+  from `server/`. Node is pinned to 22 in `.node-version` (at the root and in `server/`, where
+  the button's build starts), because Vite needs 22.12 or later.
 - *The extension must be built before loading it unpacked:* load `extension/dist/`, not
   `extension/`. Its non-UI modules (`background.js`, `config.js`, `local.js`, `golinks.js`)
   are unchanged and still tested with `node --test`.
@@ -1109,8 +1113,8 @@ for a year (`private, immutable`). `index.html` is `private, no-cache`.
   dependencies.
 
 **Not verified.** A real Deploy to Cloudflare install with the extra build step (in particular,
-that the build image allows the root `npm ci` the deploy script runs), and Static Assets on a
-live account. Both were run locally with `wrangler dev` and `wrangler deploy --dry-run`.
+that the build image honours `.node-version` and allows the root `npm ci` the build script runs),
+and Static Assets on a live account. Both were run locally with `wrangler dev` and `wrangler deploy --dry-run`.
 
 ---
 
