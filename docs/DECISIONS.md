@@ -945,10 +945,11 @@ version's writes, and rolling the Worker back would not bring the column back. S
 - *This release (expand):* migration `0006` only adds. The new code writes both `owner_id` and
   the old `owner` column, reads the email from `users` (falling back to `owner` for a row the
   previous version wrote mid-upgrade), and gives such a row an ID on its first change.
-- *A later release (contract):* first stop writing `links.owner`; then, once that version is
-  everywhere, a migration fills any missing `owner_id` and drops the column. Until then the D1
-  database still holds owners' emails in two places; the logs, which are the point of this
-  change, hold none.
+- *The next release (contract), migration `0007`:* fills any missing `owner_id` (a row the
+  pre-`0006` version wrote mid-upgrade), drops `links.owner`, removing every stored email, and
+  re-adds it empty and optional so the `0006` version's writes still succeed while it runs
+  during the upgrade. The new code never reads or writes it. Since nothing uses the leftover
+  column, any later release can drop it outright.
 
 Who is acting is looked up before a link is changed, so a failure there can no longer follow a
 committed change and lose its event.

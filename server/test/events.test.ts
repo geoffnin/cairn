@@ -181,35 +181,26 @@ describe("link lifecycle events", () => {
 });
 
 describe("users table", () => {
-  it("shows emails in the API, from the users table", async () => {
+  it("shows emails in the API, from the users table only", async () => {
     await create("mine", "https://m.test/");
     const link = await (await call("/_/api/links/mine")).json<Record<string, unknown>>();
     expect(link.owner).toBe("alice@example.com");
     expect(link.owner_id).toMatch(/^[0-9a-f]{32}$/);
-    // The email shown comes from users, not the transitional links.owner column.
-    await env.DB.exec("UPDATE links SET owner = 'stale@example.com' WHERE slug = 'mine'");
-    expect((await (await call("/_/api/links/mine")).json<{ owner: string }>()).owner).toBe("alice@example.com");
+    const row = await env.DB.prepare("SELECT * FROM links WHERE slug = 'mine'").first<Record<string, unknown>>();
+    expect(JSON.stringify(row)).not.toMatch(/@/);
   });
 
-  it("keeps the previous Worker version working during an upgrade", async () => {
-    // Statements the previous version runs, against the migrated schema.
+  it("keeps the previous Worker version working during the upgrade", async () => {
+    // Statements the previous version (migration 0006's code) runs, against the new schema.
+    const alice = (await env.DB.prepare("INSERT INTO users (id, email, created_at) VALUES ('a1', 'erin@example.com', 1) RETURNING id").first<{ id: string }>())!.id;
     await env.DB.prepare(
-      "INSERT INTO links (slug, url, description, owner, created_at, updated_at, rev) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    ).bind("old", "https://old.test/", "", "erin@example.com", 1, 1, "r0").run();
-    await env.DB.prepare("UPDATE links SET url = ?, description = ?, owner = ?, updated_at = ?, rev = ? WHERE slug = ? AND rev = ?")
-      .bind("https://old2.test/", "", "erin@example.com", 2, "r1", "old", "r0").run();
-    const { results } = await env.DB.prepare("SELECT * FROM links WHERE owner = ?").bind("erin@example.com").all();
-    expect(results).toHaveLength(1);
-
-    // The new version shows and edits that row, and gives it an owner ID on the first change.
+      "INSERT INTO links (slug, url, description, owner_id, owner, created_at, updated_at, rev) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    ).bind("old", "https://old.test/", "", alice, "erin@example.com", 1, 1, "r0").run();
+    await env.DB.prepare("UPDATE links SET url = ?, description = ?, owner_id = ?, owner = ?, updated_at = ?, rev = ? WHERE slug = ? AND rev = ?")
+      .bind("https://old2.test/", "", alice, "erin@example.com", 2, "r1", "old", "r0").run();
+    // The new version reads and edits that row without the column.
     expect((await (await call("/_/api/links/old")).json<{ owner: string }>()).owner).toBe("erin@example.com");
-    const res = await call("/_/api/links/old", { method: "PUT", body: { description: "now with an id" }, as: "erin@example.com" });
-    expect(res.status).toBe(200);
-    const erin = (await env.DB.prepare("SELECT id FROM users WHERE email = 'erin@example.com'").first<{ id: string }>())!.id;
-    expect((await res.json<{ owner_id: string }>()).owner_id).toBe(erin);
-    const update = logged.map((a) => a[0] as Record<string, unknown>).find((e) => e?.["event.name"] === "cairn.link.update");
-    expect(update).toMatchObject({ "link.owner_id": erin, "user.id": erin, "user.admin_override": false });
-    expect(update).not.toHaveProperty("link.previous_owner_id");
+    expect((await call("/_/api/links/old", { method: "PUT", body: { description: "edited" }, as: "erin@example.com" })).status).toBe(200);
   });
 
   it("changes nothing if looking up who is acting fails", async () => {
