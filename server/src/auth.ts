@@ -1,8 +1,15 @@
 // Authentication. Cairn runs behind Cloudflare Access, which signs people in (with Okta, Entra ID,
-// Google, any SAML or OIDC provider) before a request reaches the Worker, and attaches a signed
-// JWT in the Cf-Access-Jwt-Assertion header. Cairn only verifies that token.
+// Google, any SAML or OIDC provider) before a request reaches the Worker. Two ways to set it up:
 //
-//   AUTH_MODE=access (default)  verify the Access token on every request
+//   1. Access turned on for the Worker itself (recommended, and what the Deploy to Cloudflare
+//      install uses). The runtime then provides ctx.access, and ctx.access.getIdentity() returns
+//      the signed-in person, groups included. Nothing to configure in Cairn.
+//   2. A separate Access application in front of the hostname. Cairn verifies the JWT in the
+//      Cf-Access-Jwt-Assertion header itself, using ACCESS_TEAM_DOMAIN and ACCESS_AUD.
+//
+// Without either, every request is refused.
+//
+//   AUTH_MODE=access (default)  as above
 //   AUTH_MODE=dev               fixed user, honoured on localhost only, for `wrangler dev`
 import { verifyJwt } from "./jwt";
 import type { Env, User } from "./types";
@@ -53,15 +60,50 @@ function isLocalhost(req: Request): boolean {
   return host === "localhost" || host === "127.0.0.1" || host === "[::1]";
 }
 
+// getIdentity() results, keyed by the Access token they belong to, so a burst of redirects from
+// one person does not ask for their identity every time.
+const IDENTITY_TTL_MS = 60_000;
+const IDENTITY_MAX = 1000;
+const identities = new Map<string, { user: User; exp: number }>();
+
+async function fromWorkerAccess(req: Request, env: Env, access: CloudflareAccessContext): Promise<User> {
+  const token = req.headers.get("cf-access-jwt-assertion");
+  const cached = token ? identities.get(token) : undefined;
+  if (cached && cached.exp > Date.now()) {
+    assertAllowed(env, cached.user.email);
+    return cached.user;
+  }
+  const identity = await access.getIdentity();
+  const email = identity?.email;
+  if (typeof email !== "string" || !email.includes("@")) {
+    throw new AuthError("Cloudflare Access did not provide an email address. Service tokens cannot use Cairn.", 401);
+  }
+  assertAllowed(env, email);
+  const groups = (identity?.groups ?? []).map((g) => g?.name);
+  const user = toUser(env, email, typeof identity?.name === "string" ? identity.name : "", groups);
+  if (token) {
+    if (identities.size >= IDENTITY_MAX) identities.delete(identities.keys().next().value!);
+    identities.set(token, { user, exp: Date.now() + IDENTITY_TTL_MS });
+  }
+  return user;
+}
+
 /** Returns the signed-in user, or throws AuthError. */
-export async function authenticate(req: Request, env: Env): Promise<User> {
+export async function authenticate(req: Request, env: Env, ctx?: ExecutionContext): Promise<User> {
   if (mode(env) === "dev") {
     if (!isLocalhost(req)) throw new AuthError("AUTH_MODE=dev only works on localhost.", 500);
     return toUser(env, env.DEV_USER_EMAIL || "dev@example.com", "Dev User", []);
   }
 
+  // Present only when Access is on for this Worker and has authenticated this request.
+  if (ctx?.access) return fromWorkerAccess(req, env, ctx.access);
+
   if (!env.ACCESS_TEAM_DOMAIN || !env.ACCESS_AUD) {
-    throw new AuthError("Server misconfigured: ACCESS_TEAM_DOMAIN and ACCESS_AUD are required.", 500);
+    throw new AuthError(
+      "Not signed in. Turn on Cloudflare Access for this Worker in its settings in the Cloudflare dashboard " +
+        "(or set ACCESS_TEAM_DOMAIN and ACCESS_AUD if a separate Access application protects this hostname).",
+      401,
+    );
   }
   const token = req.headers.get("cf-access-jwt-assertion");
   if (!token) {
@@ -79,6 +121,10 @@ export async function authenticate(req: Request, env: Env): Promise<User> {
   }
   assertAllowed(env, claims.email);
   return toUser(env, claims.email, typeof claims.name === "string" ? claims.name : "", groupsOf(claims));
+}
+
+export function _resetIdentityCache(): void {
+  identities.clear();
 }
 
 export function handleLogout(req: Request, env: Env): Response {

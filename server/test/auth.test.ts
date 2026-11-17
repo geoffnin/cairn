@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { _resetIdentityCache } from "../src/auth";
 import { _resetJwksCache } from "../src/jwt";
 import { b64urlEncode } from "../src/util";
 import { ISSUER, accessToken, call, genKeys, seedAccessKeys, signJwt } from "./helpers";
@@ -70,7 +71,7 @@ describe("cloudflare access", () => {
   });
 
   it("fails closed when Access is not configured", async () => {
-    expect((await me(await accessToken("c@example.com"), { ACCESS_AUD: "" })).status).toBe(500);
+    expect((await me(await accessToken("c@example.com"), { ACCESS_AUD: "" })).status).toBe(401);
     expect((await me(await accessToken("c@example.com"), { AUTH_MODE: "oidc" })).status).toBe(500);
   });
 
@@ -91,5 +92,51 @@ describe("dev mode", () => {
     const ok = await call("/_/api/me", { as: null, env: dev, origin: "http://localhost:8787" });
     expect(await ok.json()).toMatchObject({ email: "me@local.test" });
     expect((await call("/_/api/me", { as: null, env: dev })).status).toBe(500);
+  });
+});
+
+describe("access turned on for the Worker (ctx.access)", () => {
+  const identity = (extra: Partial<CloudflareAccessIdentity> = {}): CloudflareAccessIdentity => ({ email: "Erin@Example.com", name: "Erin", ...extra });
+  const meWith = (workerAccess: CloudflareAccessIdentity | undefined, env = {}, headers: Record<string, string> = {}) =>
+    call("/_/api/me", { as: null, workerAccess, env, headers });
+
+  afterEach(() => _resetIdentityCache());
+
+  it("uses the runtime's identity, with no Access settings in Cairn", async () => {
+    const res = await meWith(identity(), { ACCESS_TEAM_DOMAIN: "", ACCESS_AUD: "" });
+    expect(await res.json()).toEqual({ email: "erin@example.com", name: "Erin", isAdmin: false });
+  });
+
+  it("makes admins from group names", async () => {
+    const groups = [{ id: "1", name: "Everyone" }, { id: "2", name: "GoLink-Admins" }];
+    expect(await (await meWith(identity({ groups }))).json()).toMatchObject({ isAdmin: true });
+  });
+
+  it("refuses when Access gives no identity or no email", async () => {
+    expect((await meWith(undefined)).status).toBe(401);
+    expect((await meWith({ name: "svc" })).status).toBe(401);
+  });
+
+  it("still applies ALLOWED_EMAIL_DOMAINS, including to cached identities", async () => {
+    const h = { "cf-access-jwt-assertion": "tok-1" };
+    expect((await meWith(identity(), {}, h)).status).toBe(200);
+    expect((await meWith(identity(), { ALLOWED_EMAIL_DOMAINS: "corp.test" }, h)).status).toBe(403);
+  });
+
+  it("reuses an identity for the same Access token", async () => {
+    let calls = 0;
+    const access = { email: "f@example.com" };
+    const counting = new Proxy(access, { get: (t, k) => (k === "email" && calls++, Reflect.get(t, k)) });
+    const h = { "cf-access-jwt-assertion": "tok-2" };
+    await meWith(counting as CloudflareAccessIdentity, {}, h);
+    const first = calls;
+    await meWith(counting as CloudflareAccessIdentity, {}, h);
+    expect(calls).toBe(first);
+  });
+
+  it("explains how to turn Access on when nothing protects the Worker", async () => {
+    const res = await call("/_/api/me", { as: null, env: { ACCESS_TEAM_DOMAIN: "", ACCESS_AUD: "" } });
+    expect(res.status).toBe(401);
+    expect((await res.json<{ error: string }>()).error).toMatch(/Turn on Cloudflare Access for this Worker/);
   });
 });

@@ -1,14 +1,15 @@
-// Cairn go-links server. See ../README.md for setup.
+// Cairn go-links server. See ../README.md for setup, or use the "Deploy to Cloudflare" button there.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "cairn",
   "main": "src/index.ts",
   "compatibility_date": "2026-11-01",
 
-  // Only serve on your own hostname, behind Cloudflare Access. The workers.dev and preview URLs
-  // would not be behind Access; Cairn would refuse those requests anyway, but there is no reason
-  // to expose them.
-  "workers_dev": false,
+  // The workers.dev URL gives a fresh install a working address before any custom domain exists.
+  // Turning on Cloudflare Access for the Worker protects it, and Cairn refuses every request that
+  // Access has not signed in, so it is never open. Preview URLs stay off: Access does not
+  // identify users on them, so Cairn would refuse everything there anyway.
+  "workers_dev": true,
   "preview_urls": false,
   // Logs, including one "cairn.link.click" event per visit (see src/events.ts).
   // To send them to Grafana, Datadog, Honeycomb, New Relic, Sentry or any OTLP logs endpoint,
@@ -28,38 +29,28 @@
   // Put the Worker on your own hostname, e.g. go.example.com:
   // "routes": [{ "pattern": "go.example.com", "custom_domain": true }],
 
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "cairn",
-      // Replace with the id printed by `wrangler d1 create cairn`.
-      "database_id": "00000000-0000-0000-0000-000000000000",
-      "migrations_dir": "migrations"
-    }
-  ],
-  "kv_namespaces": [
-    {
-      "binding": "CACHE",
-      // Replace with the id printed by `wrangler kv namespace create CACHE`.
-      "id": "00000000000000000000000000000000"
-    }
-  ],
+  // No IDs: the first `wrangler deploy` (or the Deploy to Cloudflare button) creates the
+  // database and namespace, named after the Worker ("cairn-db", "cairn-cache"), and later deploys
+  // keep using them. To use resources you already have, add "database_id" / "id" here.
+  "d1_databases": [{ "binding": "DB", "migrations_dir": "migrations" }],
+  "kv_namespaces": [{ "binding": "CACHE" }],
 
   "vars": {
-    // Sign-in is done by Cloudflare Access (see README, "Put Cloudflare Access in front").
+    // Sign-in is done by Cloudflare Access. Turn on Access for this Worker in its settings in the
+    // Cloudflare dashboard; nothing needs configuring here. See README, "Turn on Cloudflare Access".
     "AUTH_MODE": "access",        // "dev" for `wrangler dev` on localhost only
+    // Only if you protect the hostname with a separate Access application instead of turning
+    // Access on for the Worker: your team domain and that application's AUD tag.
     "ACCESS_TEAM_DOMAIN": "",     // e.g. your-team.cloudflareaccess.com
-    "ACCESS_AUD": "",             // the Access application's Application Audience (AUD) tag
+    "ACCESS_AUD": "",
 
     // --- authorization ---
     "ADMIN_EMAILS": "",           // comma separated; admins can edit/delete any link
-    // Comma separated group names. Only works if your Access identity provider passes a
-    // "groups" claim into the Access token (Zero Trust > Settings > Authentication > your IdP).
+    // Comma separated group names from your identity provider, as Access reports them.
     "ADMIN_GROUPS": "",
     // Restrict to these email domains, e.g. "example.com,example.co.uk". Empty = whoever the
     // Access policy lets in. Checked on every request, on top of the Access policy.
     "ALLOWED_EMAIL_DOMAINS": "",
-
 
     // How long each Worker instance reuses a redirect it has looked up, in seconds (0-3600).
     // After an edit, other instances can send people to the old destination for up to this

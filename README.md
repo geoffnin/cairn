@@ -33,59 +33,63 @@ The reasoning behind each choice is in [docs/DECISIONS.md](docs/DECISIONS.md).
 
 ## Deploy the server
 
-You need a Cloudflare account, a hostname on it (for example `go.example.com`), and Node 22+.
+### One click
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/geoffnin/cairn/tree/main/server)
+
+The button copies the `server/` folder into a new GitHub repository on your account, creates
+the Worker, its D1 database and KV namespace in your Cloudflare account, sets up the tables,
+and connects the repository so every push redeploys. Then:
+
+1. **Turn on Cloudflare Access for the Worker.** In the Cloudflare dashboard, open the Worker's
+   settings and enable Access. Choose who may sign in: for example, emails ending in
+   `@example.com`, or a group from your identity provider. Until this is on, Cairn refuses
+   every request.
+2. **Connect your identity provider** (optional) in Zero Trust → Settings → Authentication,
+   for example Okta, Entra ID or Google, via SAML or OIDC. Without one, Access signs people in
+   with a one-time code sent by email.
+3. **Set the session duration** on the Access application to decide how often people sign in
+   again; the maximum is one month.
+4. **Use your own hostname** (optional): add a custom domain such as `go.example.com` to the
+   Worker. Until then it is reachable at its `workers.dev` address.
+5. **Make yourself an admin:** set `ADMIN_EMAILS` (and optionally the other settings below)
+   in your copy's `wrangler.jsonc` and push.
+
+Access is part of Cloudflare Zero Trust, which has a free tier for small teams (check current
+pricing for your headcount). Your copy of the repository does not follow this one; pull new
+versions with git when you want them.
+
+### From the command line
+
+You need a Cloudflare account and Node 22+.
 
 ```sh
 cd server
 npm ci
 npx wrangler login
-npx wrangler d1 create cairn             # copy database_id into wrangler.jsonc
-npx wrangler kv namespace create CACHE   # copy id into wrangler.jsonc
-```
-
-In `wrangler.jsonc`, paste the two IDs and uncomment `routes` with your hostname. Then:
-
-```sh
-npm run migrate:remote
 npm run deploy
 ```
 
-The Worker refuses every request until Cloudflare Access is in front of it, so set that up next.
+The first deploy creates the D1 database and KV namespace (named after the Worker) and applies
+the migrations; later deploys apply new migrations first, then deploy. To use a hostname of your
+own, uncomment `routes` in `wrangler.jsonc`. Then turn on Access as in steps 1 to 3 above.
 
-### Put Cloudflare Access in front
+**Using a separate Access application instead.** If the hostname is already protected by a
+self-hosted Access application (rather than Access on the Worker), copy that application's AUD
+tag and your team domain into `wrangler.jsonc` as `ACCESS_AUD` and `ACCESS_TEAM_DOMAIN`. Cairn
+then verifies the token Access attaches to each request itself.
 
-Access is part of Cloudflare Zero Trust, which has a free tier for small teams (check current
-pricing for your headcount). In the Cloudflare dashboard, under **Zero Trust**:
-
-1. **Connect your identity provider** under Settings → Authentication. For Okta, add Okta (or
-   any SAML/OIDC provider) and follow the steps shown there. Skip this to start with the
-   built-in one-time PIN, which emails a code.
-2. **Create the application:** Access → Applications → Add an application → **Self-hosted**.
-   Use your hostname (`go.example.com`) with no path. Add an **Allow** policy, for example
-   "emails ending in `@example.com`" or "members of the Engineering group".
-3. **Set the session duration** on the application. This is how often people sign in again;
-   the maximum is one month.
-4. **Copy the application's AUD tag** (Application Audience, on the first application's
-   overview) and your team domain (`your-team.cloudflareaccess.com`) into `wrangler.jsonc` as
-   `ACCESS_AUD` and `ACCESS_TEAM_DOMAIN`, then `npm run deploy` again.
-
-Cairn checks the signed token Access attaches to every request, so a request that somehow skips
-Access is refused. `workers_dev` and `preview_urls` are turned off in `wrangler.jsonc` for the
-same reason.
-
-**Admins by group:** `ADMIN_GROUPS` only works if your identity provider in Zero Trust is set to
-pass group membership into the Access token (as an OIDC claim or SAML attribute named
-`groups`). `ADMIN_EMAILS` always works.
+Either way, Cairn refuses any request that Access has not signed in, so the `workers.dev`
+address is never open.
 
 ### Settings
 
 | Variable | Purpose |
 |---|---|
-| `ACCESS_TEAM_DOMAIN` | Your Zero Trust team domain, e.g. `your-team.cloudflareaccess.com` |
-| `ACCESS_AUD` | The Access application's AUD tag |
+| `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` | Only with a separate Access application: your team domain and the application's AUD tag |
 | `AUTH_MODE` | `access` (default), or `dev` for `wrangler dev` on localhost |
 | `ADMIN_EMAILS` | Comma-separated emails who can edit any link |
-| `ADMIN_GROUPS` | Comma-separated group names from the token's `groups` (see above) |
+| `ADMIN_GROUPS` | Comma-separated group names from your identity provider. With Access on the Worker these come from Access directly; with a separate Access application, only if your identity provider passes a `groups` claim |
 | `ALLOWED_EMAIL_DOMAINS` | Only these email domains may use Cairn, e.g. `example.com,example.co.uk`, on top of the Access policy. Checked on every request |
 | `METRICS_DASHBOARD_URL` | Where each link's Metrics link goes (see below) |
 | `REDIRECT_CACHE_SECONDS` | How long each Worker instance reuses a redirect, 0-3600, default 30. `0` turns this cache off |
@@ -271,9 +275,9 @@ All routes need a Cloudflare Access session. Writes need the header `X-Cairn-Req
   your platform must parse was not confirmed against a live destination. Send one click and
   look at the record before building a dashboard.
 - **Not yet proven against live services.** The tests sign real tokens with a stand-in Access
-  key, and the extension was tested against a local imitation of Access. Nothing has been
-  deployed to a real Cloudflare account behind real Access, or forwarded logs to a real
-  platform.
+  key and simulate Access on the Worker, and the extension was tested against a local imitation
+  of Access. Nothing has been deployed to a real Cloudflare account behind real Access,
+  installed with the Deploy to Cloudflare button, or forwarded logs to a real platform.
 
 ## License
 
