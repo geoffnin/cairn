@@ -175,14 +175,19 @@ describe("redirect cache TTL", () => {
     expect(await where("off", off)).toBe("https://new.test/");
   });
 
-  it("forgets unknown names after 5 seconds, so new links show up quickly", async () => {
-    clock(T0);
+  it("never caches unknown names, so a new link works immediately", async () => {
     expect(await where("soon")).toBe("/_/?new=soon");
-    // Created through another isolate: this one's memory still says "unknown".
+    // Created through another isolate, with no KV entry: this isolate must still find it at once.
     await env.DB.exec("INSERT INTO links (slug,url,owner,created_at,updated_at) VALUES ('soon','https://soon.test/','a@b.c',1,1)");
-    clock(T0 + 4_000);
-    expect(await where("soon")).toBe("/_/?new=soon");
-    clock(T0 + 6_000);
     expect(await where("soon")).toBe("https://soon.test/");
+  });
+
+  it("drops a deleted link from memory instead of remembering it as unknown", async () => {
+    await create("gone", "https://gone.test/");
+    await call("/gone");
+    await call("/_/api/links/gone", { method: "DELETE" });
+    expect(await where("gone")).toBe("/_/?new=gone");
+    await env.DB.exec("INSERT INTO links (slug,url,owner,created_at,updated_at) VALUES ('gone','https://back.test/','a@b.c',1,1)");
+    expect(await where("gone")).toBe("https://back.test/");
   });
 });

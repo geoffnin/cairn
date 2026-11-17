@@ -9,8 +9,6 @@ export const PLACEHOLDER = "{*}";
 const SLUG_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 const DEFAULT_CACHE_SECONDS = 30;
 const MAX_CACHE_SECONDS = 3600;
-/** Unknown names are remembered briefly, so a link someone just created shows up quickly. */
-const MISS_CACHE_SECONDS = 5;
 const MEM_MAX = 2000;
 const KV_TTL_S = 7 * 24 * 3600;
 
@@ -83,9 +81,13 @@ export function cacheSeconds(env: Env): number {
   return Number.isFinite(n) && n >= 0 ? Math.min(Math.floor(n), MAX_CACHE_SECONDS) : DEFAULT_CACHE_SECONDS;
 }
 
+/**
+ * Remembers a destination. Unknown names (url === null) are never cached, here or in KV: a link
+ * someone has just created must work immediately, and a miss costs one D1 read.
+ */
 function memSet(env: Env, slug: string, url: string | null): void {
-  const ttl = url === null ? Math.min(MISS_CACHE_SECONDS, cacheSeconds(env)) : cacheSeconds(env);
-  if (ttl === 0) {
+  const ttl = cacheSeconds(env);
+  if (url === null || ttl === 0) {
     mem.delete(slug);
     return;
   }
@@ -117,7 +119,7 @@ export async function lookupTarget(env: Env, ctx: ExecutionContext, slug: string
   if (url === null) {
     const row = await env.DB.prepare("SELECT url FROM links WHERE slug = ?").bind(slug).first<{ url: string }>();
     url = row?.url ?? null;
-    // Misses are cached in memory only: keeps KV writes (the scarce free-tier resource) for real links.
+    // Unknown names are not cached anywhere (see memSet).
     if (url !== null) ctx.waitUntil(kvSet(env, slug, url));
   }
   memSet(env, slug, url);
