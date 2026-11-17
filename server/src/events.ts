@@ -9,6 +9,8 @@
 // Fields are flat, dotted keys in OpenTelemetry attribute style so they stay queryable however
 // the platform maps the object (attributes, or a JSON body it parses).
 
+import { slugForTelemetry } from "./links";
+
 export const CLICK_EVENT = "cairn.link.click";
 export const CREATE_EVENT = "cairn.link.create";
 export const UPDATE_EVENT = "cairn.link.update";
@@ -33,7 +35,7 @@ function compact<T extends object>(o: T): T {
 
 export interface ClickEvent {
   "event.name": typeof CLICK_EVENT;
-  /** The name as requested, lowercased. */
+  /** The name as requested, lowercased; "(invalid)" if it is not valid link syntax. */
   "link.slug": string;
   /** false when nobody owns this name yet: people tried it and were sent to the create form. */
   "link.found": boolean;
@@ -54,7 +56,7 @@ export function clickEvent(
 ): ClickEvent {
   const event: ClickEvent = {
     "event.name": CLICK_EVENT,
-    "link.slug": slug,
+    "link.slug": slugForTelemetry(slug),
     "link.found": found,
     "link.passthrough": passthrough,
   };

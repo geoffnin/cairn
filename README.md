@@ -175,7 +175,10 @@ outgoing call by itself; Cairn adds three spans:
 | `cairn.auth` | `auth.method` (`worker_access`, `access_jwt` or `dev`), `auth.identity_cached` |
 | `cairn.api` | `http.method`, `cairn.api.route` (e.g. `/links/:slug`), `http.status_code` |
 
-Failures are recorded as exceptions on the span. No span carries an email address.
+Failures are recorded as exceptions on the span, with any email address in the message
+replaced by `[email]`. No span carries an email address. A requested name that could never be
+a link (say `go/alice@example.com`) is recorded as `(invalid)`, in traces and in the
+`cairn.link.click` event alike, and API paths Cairn doesn't serve are labelled `other`.
 
 Traces are visible in the Cloudflare dashboard straight away. To send them to your own platform
 over OpenTelemetry, create a traces destination in the dashboard and add its name to

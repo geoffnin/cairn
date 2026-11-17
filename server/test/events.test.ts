@@ -51,6 +51,16 @@ describe("click events", () => {
     ]);
   });
 
+  it("logs names that could never be links as (invalid), not as typed", async () => {
+    await call("/alice@example.com");
+    await call("/Alice%40Example.com/x");
+    expect(events()).toEqual([
+      { "event.name": "cairn.link.click", "link.slug": "(invalid)", "link.found": false, "link.passthrough": false },
+      { "event.name": "cairn.link.click", "link.slug": "(invalid)", "link.found": false, "link.passthrough": true },
+    ]);
+    expect(JSON.stringify(logged)).not.toMatch(/@/);
+  });
+
   it("does not log for signed-out visitors, the UI, or the API", async () => {
     await create("x", "https://x.test/");
     logged = [];

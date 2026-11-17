@@ -13,6 +13,18 @@ import { nowSeconds } from "./util";
 
 export const PLACEHOLDER = "{*}";
 const SLUG_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+
+/** Placeholder recorded instead of a requested name that could never be a link. */
+export const INVALID_SLUG = "(invalid)";
+
+/**
+ * The link name as it may appear in logs and traces: the name if it is valid link syntax, else a
+ * fixed placeholder. Visitors can request any path (go/alice@example.com), and recording it
+ * verbatim would put arbitrary text, emails included, into telemetry.
+ */
+export function slugForTelemetry(slug: string): string {
+  return SLUG_RE.test(slug) ? slug : INVALID_SLUG;
+}
 const DEFAULT_CACHE_SECONDS = 30;
 const MAX_CACHE_SECONDS = 3600;
 /** Unknown names are remembered briefly, so a link someone just created shows up quickly. */
@@ -129,7 +141,7 @@ const newRev = () => crypto.randomUUID();
 /** Redirect hot path: slug -> target URL, or null if there is no such link. */
 export function lookupTarget(env: Env, slug: string): Promise<string | null> {
   // cache.layer says which layer answered: the main performance signal for redirects.
-  return inSpan("cairn.link.lookup", { "link.slug": slug }, async (span) => {
+  return inSpan("cairn.link.lookup", { "link.slug": slugForTelemetry(slug) }, async (span) => {
     const answer = (layer: "memory" | "kv" | "d1", url: string | null) => {
       span.setAttributes({ "cache.layer": layer, "link.found": url !== null });
       return url;

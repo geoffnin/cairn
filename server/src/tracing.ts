@@ -2,6 +2,8 @@
 // every KV, D1 and fetch call). Spans are recorded only when tracing is enabled for the Worker
 // and the request is sampled (observability.traces in wrangler.jsonc); otherwise this costs a
 // function call. Attributes never include emails: links, cache layers, methods, status codes.
+// Recorded exceptions have email addresses redacted from their message and stack (an error
+// such as "x@y.com is not allowed to use this service" is still thrown unchanged).
 import { tracing } from "cloudflare:workers";
 
 export type SpanAttributes = Record<string, string | number | boolean | undefined>;
@@ -16,9 +18,12 @@ interface Tracer {
 
 let tracer: Tracer = tracing as unknown as Tracer;
 
+const EMAIL = /[^\s@"'<>(),;:]+@[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)*/gu;
+export const redactEmails = (text: string | undefined) => text?.replace(EMAIL, "[email]");
+
 const record = (span: SpanHandle, e: unknown) => {
   const err = e instanceof Error ? e : new Error(String(e));
-  span.recordException({ name: err.name, message: err.message, stack: err.stack });
+  span.recordException({ name: err.name, message: redactEmails(err.message), stack: redactEmails(err.stack) });
 };
 
 /** Runs `fn` inside a span named `name`. Exceptions and rejections are recorded and rethrown. */

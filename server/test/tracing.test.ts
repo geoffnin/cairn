@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { _resetMemCache } from "../src/links";
-import { _setTracer, type SpanAttributes } from "../src/tracing";
+import { _setTracer, redactEmails, type SpanAttributes } from "../src/tracing";
 import { call, env } from "./helpers";
 
 interface Recorded {
@@ -83,7 +83,30 @@ describe("custom spans", () => {
     await call("/_/api/links/pii", { method: "PUT", body: { owner: "bob@example.com" } });
     await call("/pii");
     await call("/_/api/me", { as: null, workerAccess: { email: "w@example.com" } });
-    expect(spans.length).toBeGreaterThan(4);
+    // Things a visitor can type, and sign-ins refused because of their email.
+    await call("/alice@example.com");
+    await call("/alice%40example.com/more");
+    await call("/_/api/links/alice@example.com/extra");
+    await call("/_/api/whatever@example.com");
+    const denied = { ALLOWED_EMAIL_DOMAINS: "corp.test" };
+    expect((await call("/_/api/me", { env: denied })).status).toBe(403);
+    expect((await call("/_/api/me", { as: null, workerAccess: { email: "w@example.com" }, env: denied })).status).toBe(403);
+    expect(spans.length).toBeGreaterThan(10);
     expect(JSON.stringify(spans)).not.toMatch(/@/);
+  });
+
+  it("labels names that could never be links, and unknown API paths, with fixed values", async () => {
+    await call("/alice@example.com");
+    await call("/_/api/links/a@b.c/extra");
+    expect(named("cairn.link.lookup")[0]).toMatchObject({ "link.slug": "(invalid)" });
+    expect(named("cairn.api")[0]).toMatchObject({ "cairn.api.route": "other", "http.status_code": 404 });
+  });
+
+  it("redacts emails from recorded exceptions but not from the error itself", async () => {
+    const res = await call("/_/api/me", { env: { ALLOWED_EMAIL_DOMAINS: "corp.test" } });
+    expect((await res.json<{ error: string }>()).error).toContain("alice@example.com");
+    const [exception] = spans.find((s) => s.name === "cairn.auth")!.exceptions;
+    expect(exception).toMatchObject({ message: "[email] is not allowed to use this service." });
+    expect(redactEmails("a x.y+z@sub.example.co.uk, b@c.d!")).toBe("a [email], [email]!");
   });
 });
