@@ -28,6 +28,9 @@ function memorySource(initial: Link[] = [], shared = false) {
         .filter((l) => !mine || l.owner === ME)
         .sort((a, b) => a.slug.localeCompare(b.slug));
     },
+    async get(slug: string) {
+      return links.get(slug) ?? null;
+    },
     async create(l: Link) {
       source.creates++;
       await source.gate;
@@ -95,8 +98,20 @@ describe("LinksPage", () => {
     history.replaceState(null, "", "/_/?new=roadmap");
     render(LinksPage, { source: memorySource() });
     expect((form().getByLabelText("Name") as HTMLInputElement).value).toBe("roadmap");
-    expect(screen.getByText(/does not exist yet/).textContent).toBe("roadmap does not exist yet. Add a destination to create it.");
     await waitFor(() => expect(document.activeElement).toBe(form().getByLabelText("Destination URL")));
+    await waitFor(() => expect(form().getByText("go/roadmap is free")).toBeTruthy());
+  });
+
+  it("says a taken name already exists, beside and under the field, and does not send it", async () => {
+    const source = memorySource([wiki]);
+    render(LinksPage, { source });
+    await fireEvent.input(form().getByLabelText("Name"), { target: { value: "Wiki" } });
+    await fireEvent.input(form().getByLabelText("Destination URL"), { target: { value: "https://x.test" } });
+    await waitFor(() => expect(form().getByText("go/wiki already exists.")).toBeTruthy());
+    expect(form().getByLabelText("Name").getAttribute("aria-invalid")).toBe("true");
+    await fireEvent.submit(screen.getByRole("button", { name: "Create link" }).closest("form")!);
+    expect(source.creates).toBe(0);
+    expect(document.activeElement).toBe(form().getByLabelText("Name"));
   });
 
   it("hands over a description from ?desc= with the rest of the draft", async () => {

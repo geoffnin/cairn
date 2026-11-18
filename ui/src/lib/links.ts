@@ -30,6 +30,8 @@ export interface LinkSource {
   /** A shared server: links have owners and edit rights, and "Only mine" filters. */
   readonly shared: boolean;
   list(query: { q: string; mine: boolean }): Promise<Link[]>;
+  /** The link with this exact name (lowercase), or null when the name is free. */
+  get(slug: string): Promise<Link | null>;
   create(link: NewLink): Promise<Link>;
   update(link: Link, changes: LinkChanges): Promise<void>;
   remove(link: Link): Promise<void>;
@@ -76,12 +78,7 @@ export type NameCheck =
   /** `alternative` is a free name to offer instead. */
   | { state: "taken"; link: Link; alternative?: string };
 
-/** A link with how often it was used in the last 30 days. */
-export interface UsedLink extends Link {
-  uses: number;
-}
-
-/** A row of the server's directory: a used link, and when it last changed (ISO time). */
-export interface DirectoryLink extends UsedLink {
+/** A row of the server's directory: a link, and when it last changed (ISO time). */
+export interface DirectoryLink extends Link {
   updated: string;
 }

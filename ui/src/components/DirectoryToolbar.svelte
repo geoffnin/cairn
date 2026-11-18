@@ -2,7 +2,7 @@
      with their counts, and the sort order. -->
 <script lang="ts" module>
   export type Filter = "all" | "mine" | "new";
-  export type Sort = "used" | "updated" | "name";
+  export type Sort = "updated" | "name";
 </script>
 
 <script lang="ts">
@@ -23,7 +23,7 @@
     onsort?: (sort: Sort) => void;
     onnew?: () => void;
   };
-  let { q = $bindable(""), filter = $bindable("all"), sort = $bindable("used"), counts, oninput, onfilter, onsort, onnew }: Props = $props();
+  let { q = $bindable(""), filter = $bindable("all"), sort = $bindable("updated"), counts, oninput, onfilter, onsort, onnew }: Props = $props();
 
   function onWindowKey(e: KeyboardEvent) {
     const target = e.target as Element | null;
@@ -51,7 +51,7 @@
     />
     <SelectField
       label="Sort" inline bind:value={sort} onchange={() => onsort?.(sort)}
-      options={[{ value: "used", label: "Most used" }, { value: "updated", label: "Recently updated" }, { value: "name", label: "Name" }]}
+      options={[{ value: "updated", label: "Recently updated" }, { value: "name", label: "Name" }]}
     />
   </div>
 </div>

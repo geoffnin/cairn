@@ -2,8 +2,8 @@
      server): header, New link card, and the links card with search and the table. Everything
      specific to where links live comes from the LinkSource. -->
 <script lang="ts">
-  import { onMount, type Snippet } from "svelte";
-  import type { Link, LinkSource, Message } from "../lib/links";
+  import { onMount, untrack, type Snippet } from "svelte";
+  import type { Link, LinkSource, Message, NameCheck } from "../lib/links";
   import Card from "./Card.svelte";
   import Checkbox from "./Checkbox.svelte";
   import EditDialog from "./EditDialog.svelte";
@@ -72,10 +72,33 @@
   let slug = $state(unknownName);
   let url = $state(params.get("url") ?? "");
   let description = $state(params.get("desc") ?? "");
-  let formMessage = $state<Message | null>(
-    unknownName ? { text: `go/${unknownName} does not exist yet. Add a destination to create it.` } : null,
-  );
+  let formMessage = $state<Message | null>(null);
   let urlInput: HTMLInputElement | undefined = $state();
+
+  // Whether the name being typed is free, for the mark beside it. Each keystroke shows the spinner
+  // at once, so a stale "free" never stands; the lookup waits for a pause in typing.
+  let check = $state<NameCheck | null>(null);
+  let checkSeq = 0;
+  let checkTimer: ReturnType<typeof setTimeout>;
+  function checkName(raw: string) {
+    clearTimeout(checkTimer);
+    const id = ++checkSeq;
+    const name = raw.trim().toLowerCase();
+    if (!name) return void (check = null);
+    check = { state: "checking" };
+    checkTimer = setTimeout(async () => {
+      try {
+        const link = await source.get(name);
+        if (id === checkSeq) check = link ? { state: "taken", link } : { state: "free" };
+      } catch {
+        if (id === checkSeq) check = null; // a name that cannot be a link: Create says why
+      }
+    }, 200);
+  }
+  $effect(() => {
+    const name = slug;
+    untrack(() => checkName(name));
+  });
 
   onMount(() => {
     if (unknownName) urlInput?.focus();
@@ -91,8 +114,9 @@
 
   <LinkForm
     create={(l) => source.create(l)}
-    bind:slug bind:url bind:description bind:message={formMessage} bind:urlInput
+    bind:slug bind:url bind:description bind:message={formMessage} bind:urlInput {check}
     oncreated={(link) => {
+      checkName(slug); // the name just made is no longer free, if it was typed again meanwhile
       history.replaceState(null, "", location.pathname);
       markFresh(link.slug);
       load();

@@ -22,7 +22,7 @@ export async function api<T>(method: string, path: string, body?: unknown): Prom
   const data: unknown = await res.json().catch(() => ({}));
   if (!res.ok) {
     const reason = typeof data === "object" && data !== null && "error" in data && typeof data.error === "string" ? data.error : "";
-    throw new Error(reason || `Request failed (${res.status})`);
+    throw Object.assign(new Error(reason || `Request failed (${res.status})`), { status: res.status });
   }
   return data as T;
 }
@@ -36,6 +36,14 @@ export const serverLinks: LinkSource = {
     if (q) p.set("q", q);
     if (mine) p.set("owner", "me");
     return (await api<{ links: Link[] }>("GET", `/links?${p}`)).links;
+  },
+  async get(slug) {
+    try {
+      return await api<Link>("GET", `/links/${encodeURIComponent(slug)}`);
+    } catch (err) {
+      if ((err as { status?: number }).status === 404) return null;
+      throw err;
+    }
   },
   create: (link) => api<Link>("POST", "/links", link),
   async update(link, changes) {

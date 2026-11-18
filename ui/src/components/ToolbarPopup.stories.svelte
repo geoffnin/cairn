@@ -30,7 +30,7 @@
   args={{ view: { kind: "new", check: { state: "free" } }, slug: "q4", tab: { url: q4.url, title: "Q4 planning" } }}
   play={async ({ args, canvas, userEvent }) => {
     await expect(canvas.getByLabelText("Name")).toHaveFocus();
-    await expect(canvas.getByText("is free")).toBeVisible();
+    await expect(canvas.getByText("go/q4 is free")).toBeInTheDocument();
     await userEvent.click(canvas.getByRole("button", { name: "Create link" }));
     await expect(args.oncreate).toHaveBeenCalledWith({ slug: "q4", url: q4.url, description: "Q4 planning" });
   }}
@@ -110,10 +110,10 @@
   play={async ({ canvas, userEvent }) => {
     const name = canvas.getByLabelText("Name");
     await userEvent.type(name, "bug");
-    await expect(await canvas.findByText(/already exists/)).toBeVisible();
+    await expect(await canvas.findByText("go/bug already exists")).toHaveAttribute("role", "status");
     await userEvent.click(canvas.getByRole("button", { name: "Use go/bug-docs" }));
     await expect(name).toHaveValue("bug-docs");
-    await expect(canvas.getByText("is free")).toBeVisible();
+    await expect(canvas.getByText("go/bug-docs is free")).toBeInTheDocument();
     await userEvent.click(canvas.getByRole("button", { name: "Create link" }));
     const dest = await canvas.findByText("→ docs.example.com/…/q4-planning");
     await waitFor(() => expect(dest).toBeVisible()); // it settles in

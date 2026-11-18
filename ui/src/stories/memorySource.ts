@@ -13,6 +13,10 @@ export function memorySource(initial: Link[] = [], shared = false, me?: string):
         .filter((l) => !mine || l.owner === me)
         .sort((a, b) => a.slug.localeCompare(b.slug));
     },
+    async get(slug) {
+      const l = links.get(slug);
+      return l ? { ...l } : null;
+    },
     async create(l) {
       if (links.has(l.slug)) throw new Error(`go/${l.slug} already exists.`);
       const link = shared && me ? { ...l, owner: me } : { ...l };

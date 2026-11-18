@@ -2,14 +2,14 @@
      about it; Copy link, Edit and Delete on the right. -->
 <script lang="ts">
   import type { Link } from "../lib/links";
-  import { formatAgoLong, formatDate, formatFullDate } from "../lib/format";
+  import { formatDate, formatFullDate } from "../lib/format";
   import Button from "./Button.svelte";
   import CopyButton from "./CopyButton.svelte";
   import Facts from "./Facts.svelte";
   import GoName from "./GoName.svelte";
 
   type Props = {
-    link: Link & { created: string; changed?: string; lastUsed?: string };
+    link: Link & { created: string; changed?: string };
     now?: Date;
     /** What Copy link puts on the clipboard. */
     shareUrl?: string;
@@ -22,7 +22,6 @@
     { label: "Owner", value: link.owner ?? "you" },
     { label: "Created", value: formatFullDate(link.created) },
     { label: "Last changed", value: link.changed ? formatDate(link.changed, now) : "Never" },
-    { label: "Last used", value: link.lastUsed ? formatAgoLong(link.lastUsed, now) : "Not yet" },
   ]);
   const editable = $derived(link.can_edit ?? true);
   const id = $props.id();

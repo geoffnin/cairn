@@ -11,7 +11,7 @@
 </script>
 
 <Story name="Owner's view" play={async ({ args, canvas, userEvent }) => {
-  await expect(canvas.getByText("4 minutes ago")).toBeVisible();
+  await expect(canvas.queryByText("Last used")).toBeNull();
   await expect(canvas.getByText("Mar 4, 2026")).toBeVisible();
   await userEvent.click(canvas.getByRole("button", { name: "Copy link" }));
   await expect(args.copy).toHaveBeenCalledWith("http://go/roadmap");
