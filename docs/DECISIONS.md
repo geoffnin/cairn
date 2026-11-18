@@ -195,7 +195,8 @@ browsing traffic.
 **Permissions, kept minimal.**
 
 - `declarativeNetRequestWithHostAccess` plus host access to `*://go/*` only, rather than the
-  broader `declarativeNetRequest` permission.
+  broader `declarativeNetRequest` permission. (D32 adds Google, Bing and DuckDuckGo, to catch
+  searches for `go/...`.)
 - Access to the server's origin is an *optional* permission requested when the user saves the
   server URL. If it is declined, redirects still work and the popup hands off to the website's
   create form instead of calling the API.
@@ -1182,6 +1183,48 @@ lacks `omnibox` and `storage.managed`, which a Safari target would have to allow
 Svelte's runtime sets `innerHTML` from its compiled templates), but was not run in Firefox here:
 the redirect, popup, address-bar suggestions and shared mode (including Cloudflare Access cookies
 on the extension's API calls) need a manual check with `npx web-ext run -s extension/dist/firefox`.
+
+---
+
+## D32. Catch searches for `go/...`; icons from the design system's mark
+
+**Date:** 2026-11-18 · **Status:** accepted · **Amends:** D7, D31
+
+**Decision.** The extension adds a second redirect rule. A search for `go/<anything>` on
+Google (`www.google.com/search`), Bing (`www.bing.com/search`) or DuckDuckGo
+(`duckduckgo.com/?q=`) goes to `go.html?search=<anything>`. That page decodes the query and
+goes on to `http://go/<anything>`, which the existing rule sends to the server or the local
+resolver. The manifest gains host access to those three sites, which the redirect needs.
+
+**Why.** Chrome treats a typed `go/fb` as a search until `go` is a known host, so on a fresh
+install `go/name` did nothing but search, and the only fix was a trick (type `go/name/` once).
+Catching the search makes the first try work. The rule matches only a query that starts with
+`go/` (`q=go%2F...`), so other searches are untouched. `location.replace` keeps the search and
+`go.html` out of the history, so Back returns to the page before.
+
+**Costs, accepted.**
+
+- *The install prompt names the three sites* ("read and change your data on www.google.com,
+  www.bing.com and duckduckgo.com"). The extension never reads those pages; the rule only
+  redirects matching search URLs. An update that adds the permission makes Chrome disable the
+  extension until the person approves it.
+- *Other search engines are not covered.* There, the trailing-slash trick or `go` + space still
+  works.
+- *Google's country domains are not covered.* Host permissions cannot wildcard a top-level
+  domain, and Chrome and Firefox send address-bar searches to `www.google.com`.
+
+**Icons.** The toolbar and tab icons were the stacked-stones placeholder. They are now the
+design system's seven-face mark (`ui/src/styles/mark.svg`, the same shapes as
+`Mark.svelte` with the colours fixed), rendered to 16, 48 and 128 px PNGs. The 128 px icon
+keeps 16 px of padding, as Chrome asks. The server's web UI uses the same SVG as its favicon.
+
+**Checked** in Chromium with the Chrome build:
+- Google, Bing and DuckDuckGo searches for `go/fb`, `go/jira/ABC-1` and `go/jira ABC-2` open
+  the link, including `{*}` pass-through. An unknown name opens the new-link page.
+- `golang tutorial` is not redirected.
+- Back after a caught search returns to the page before.
+
+Not run in Firefox.
 
 ---
 

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Cairn Go Links",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Type go/name in the address bar to open short links, kept in this browser or on your team's Cairn server.",
   "minimum_chrome_version": "123",
   "icons": {
@@ -15,7 +15,10 @@
     "activeTab"
   ],
   "host_permissions": [
-    "*://go/*"
+    "*://go/*",
+    "https://www.google.com/*",
+    "https://www.bing.com/*",
+    "https://duckduckgo.com/*"
   ],
   "optional_host_permissions": [
     "*://*/*"

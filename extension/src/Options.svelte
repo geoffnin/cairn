@@ -9,7 +9,7 @@
   import Status from "@cairn/ui/components/Status.svelte";
   import TextField from "@cairn/ui/components/TextField.svelte";
   import type { Message } from "@cairn/ui/lib/links";
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { LOCAL, SHARED, getState, hasServerAccess, normalizeServerUrl, probe, serverOrigins, setMode, setServer } from "../config.js";
   import { ext } from "../ext.js";
   import { countLinks } from "../local.js";
@@ -21,6 +21,8 @@
 
   let current = $state<State | null>(null); // as last shown, so clicks can respond without waiting
   let mode = $state(LOCAL);
+  // Shared chosen before any server is saved: shown as chosen, saved once a server is.
+  let pendingShared = $state(false);
   let count = $state(0);
   let status = $state<ServerStatus | null>(null);
   let serverUrl = $state("");
@@ -59,23 +61,29 @@
     // Show what is saved straight away; asking the server how it is can take a while.
     if (current?.server?.url !== state.server?.url) status = null;
     current = state;
-    mode = state.mode;
+    mode = pendingShared && !state.server ? SHARED : state.mode;
     count = n;
     if (document.activeElement !== serverInput) serverUrl = state.server?.url ?? "";
     const s = state.server ? await sharedStatus(state.server) : null;
     if (seq === renderSeq) status = s;
   }
 
+  function chooseLocal() {
+    pendingShared = false;
+    setMode(LOCAL).then(render);
+  }
+
   function chooseShared() {
     if (current?.server) return void setMode(SHARED).then(render);
-    // Nothing to switch to yet: keep local mode until a server is saved.
-    mode = LOCAL;
-    serverInput?.focus();
+    // Nothing to switch to yet: links stay in this browser until a server is saved.
+    pendingShared = true;
+    tick().then(() => serverInput?.focus()); // once the field is enabled
     say("Enter your company's Cairn server address, then choose Use this server.");
   }
 
   async function useServer(e: SubmitEvent) {
     e.preventDefault();
+    if (mode !== SHARED) return;
     let url: string;
     try {
       url = normalizeServerUrl(serverUrl);
@@ -90,6 +98,7 @@
       const p = await probe(srv);
       if (p.error) return say(p.error, true);
       await setServer(url);
+      pendingShared = false;
       serverInput?.blur();
       if (p.email) say(`Using ${srv.label}, signed in as ${p.email}. Type go/ in the address bar.`);
       else signIn(srv);
@@ -136,7 +145,7 @@
   <fieldset>
     <legend>Use links from</legend>
     {#if !current?.managed}
-      <ModeOption name="mode" value={LOCAL} bind:group={mode} title="This browser" onselect={() => setMode(LOCAL).then(render)}>
+      <ModeOption name="mode" value={LOCAL} bind:group={mode} title="This browser" onselect={chooseLocal}>
         {#snippet body()}Stored only in this browser profile, not shared or synced · {count} link{count === 1 ? "" : "s"}{/snippet}
         {#snippet extra()}
           <Button onclick={() => ext.tabs.create({ url: ext.runtime.getURL("links.html") })}>Manage links</Button>
@@ -154,10 +163,10 @@
       {#snippet extra()}
         <form class="server" onsubmit={useServer}>
           <TextField
-            label="Server URL" mono bind:value={serverUrl} bind:input={serverInput} disabled={current?.managed}
+            label="Server URL" mono bind:value={serverUrl} bind:input={serverInput} disabled={current?.managed || mode !== SHARED}
             placeholder="https://go.example.com" spellcheck={false} autocomplete="off"
           />
-          {#if !current?.managed}<Button variant="primary" type="submit" disabled={saving}>Use this server</Button>{/if}
+          {#if !current?.managed}<Button variant="primary" type="submit" disabled={saving || mode !== SHARED}>Use this server</Button>{/if}
         </form>
         {#if current?.server && status?.action === "grant"}
           {@const srv = current.server}

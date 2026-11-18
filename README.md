@@ -274,8 +274,10 @@ a managed fleet.
   currently come from (this browser or your server); once a server is set, the popup lets you
   switch.
 
-If the browser runs a web search the first time you type `go/name`, type `go/name/` (trailing
-slash) once, or use the `go` + space form; it then remembers it as an address.
+Until the browser knows `go` as an address, it sends a typed `go/name` to your search engine.
+On Google, Bing and DuckDuckGo the extension catches that search and opens the link instead. With
+another search engine, type `go/name/` (trailing slash) once, or use the `go` + space form; the
+browser then remembers it as an address.
 
 ## Develop
 
