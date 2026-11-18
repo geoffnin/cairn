@@ -5,7 +5,8 @@
   "workspaces": [
     "ui",
     "web",
-    "extension"
+    "extension",
+    "site"
   ],
   "engines": {
     "node": ">=22.12"
@@ -16,7 +17,8 @@
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build -o storybook-static",
     "test": "vitest run && npm test -w extension",
-    "tokens": "node design/build-tokens.mjs"
+    "tokens": "node design/build-tokens.mjs",
+    "build-site": "npm run build -w site && npm run build-storybook -- -o site/dist/storybook"
   },
   "devDependencies": {
     "@storybook/addon-a11y": "^10.6.7",

@@ -20,7 +20,8 @@ jobs:
       - run: npm run build
       # Firefox's add-on validator, so a problem shows up here rather than at release time.
       - run: npm run lint -w extension
-      - run: npm run build-storybook
+      # The marketing site (site/) with Storybook inside it at /storybook/.
+      - run: npm run build-site
       # The Deploy to Cloudflare button copies only server/, so it deploys the committed build.
       - name: Committed server UI build is up to date
         run: |
@@ -29,13 +30,13 @@ jobs:
             echo "::error::server/public/_/ is out of date. Run 'npm run build' at the root and commit it."
             exit 1
           fi
-      # Hand Storybook to GitHub Pages from main, once everything above has
-      # passed; the storybook job deploys it.
+      # Hand the site to GitHub Pages from main, once everything above has
+      # passed; the pages job deploys it.
       - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v4
         with:
-          path: storybook-static
-  storybook:
+          path: site/dist
+  pages:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: frontend
     runs-on: ubuntu-latest
