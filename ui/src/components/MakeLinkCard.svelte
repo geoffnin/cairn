@@ -1,6 +1,5 @@
 <!-- Makes a link that someone just tried: the name is filled in, so the destination is where to
-     start. Creating it opens it, since that is where the person was going. `tries` says how many
-     people wanted the name. -->
+     start. Creating it opens it, since that is where the person was going. -->
 <script lang="ts">
   import type { Link, Message, NewLink } from "../lib/links";
   import Button from "./Button.svelte";
@@ -10,11 +9,10 @@
 
   type Props = {
     slug: string;
-    tries?: number;
     create: (link: NewLink) => Promise<Link>;
     oncreated?: (link: Link) => void;
   };
-  let { slug: initial, tries = 0, create, oncreated }: Props = $props();
+  let { slug: initial, create, oncreated }: Props = $props();
   let slug = $state("");
   let url = $state("");
   let description = $state("");
@@ -27,10 +25,6 @@
   $effect(() => {
     urlInput?.focus();
   });
-
-  const note = $derived(
-    `You’ll be the owner.${tries > 0 ? ` ${tries} ${tries === 1 ? "person" : "people"} tried this name this month.` : ""}`,
-  );
 
   async function submit(e: SubmitEvent) {
     e.preventDefault();
@@ -57,7 +51,7 @@
     <Status {message} />
     <div class="foot">
       <Button variant="primary" type="submit" disabled={busy}>Create link and open it</Button>
-      <span class="cn-hint">{note}</span>
+      <span class="cn-hint">You’ll be the owner.</span>
     </div>
   </form>
 </Card>

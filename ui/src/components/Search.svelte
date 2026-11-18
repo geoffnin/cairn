@@ -30,6 +30,7 @@
   <input
     bind:this={input} bind:value {oninput} onkeydown={onKey}
     class="cn-control" type="search" {placeholder} aria-label={label} aria-keyshortcuts="/" autocomplete="off"
+    data-1p-ignore data-lpignore="true" data-bwignore
   />
   <span class="cn-kbd" aria-hidden="true">/</span>
 </div>

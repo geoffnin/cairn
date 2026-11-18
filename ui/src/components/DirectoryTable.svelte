@@ -1,4 +1,4 @@
-<!-- The server's list of all links, with how much each is used. One row can be selected and moved
+<!-- The server's list of all links. One row can be selected and moved
      with j and k; Enter opens it, y copies it, e edits it (the keys work anywhere on the page but in
      a field). A link just made (`fresh`) carries the terracotta marker. The foot says how many of
      how many are shown, and the keys. -->
@@ -58,9 +58,9 @@
 <section class="directory" aria-label="Links">
   <div class="wrap">
     <table>
-      <colgroup><col class="name" /><col /><col class="owner" /><col class="num" /><col class="num" /></colgroup>
+      <colgroup><col class="name" /><col /><col class="owner" /><col class="num" /></colgroup>
       <thead>
-        <tr><th scope="col">Name</th><th scope="col">Destination</th><th scope="col">Owner</th><th scope="col" class="r">Uses, 30d</th><th scope="col" class="r">Updated</th></tr>
+        <tr><th scope="col">Name</th><th scope="col">Destination</th><th scope="col">Owner</th><th scope="col" class="r">Updated</th></tr>
       </thead>
       <tbody bind:this={body}>
         {#each links as link, i (link.slug)}
@@ -73,11 +73,10 @@
               {#if link.description}<span class="desc">{link.description}</span>{/if}
             </td>
             <td class="owner" title={link.owner}>{formatOwner(link.owner, me)}</td>
-            <td class="r uses">{formatCount(link.uses)}</td>
             <td class="r when"><time datetime={link.updated}>{formatAgo(link.updated, now)}</time></td>
           </tr>
         {:else}
-          <tr><td colspan="5"><EmptyState {query} /></td></tr>
+          <tr><td colspan="4"><EmptyState {query} /></td></tr>
         {/each}
       </tbody>
     </table>
@@ -93,8 +92,8 @@
   .wrap { overflow-x: auto; }
   table { width: 100%; min-width: 640px; border-collapse: collapse; table-layout: fixed; }
   col.name { width: 24%; }
-  col.owner { width: 13%; }
-  col.num { width: 13%; }
+  col.owner { width: 16%; }
+  col.num { width: 14%; }
   th { padding: var(--space-3) var(--space-4); text-align: left; font: var(--type-label); color: var(--ink-muted); border-bottom: 1px solid var(--line); }
   .r { text-align: right; }
   td { padding: var(--space-2) var(--space-4); height: 52px; border-bottom: 1px solid var(--line); vertical-align: middle; overflow: hidden; }
@@ -105,7 +104,6 @@
   .dest { display: block; font: var(--type-url); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .desc { display: block; font: var(--type-small); color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .owner, .when { font-size: 13px; color: var(--ink-muted); white-space: nowrap; text-overflow: ellipsis; }
-  .uses { font-size: 13px; font-variant-numeric: tabular-nums; }
   .fresh { background: var(--terracotta-soft); }
   .fresh:hover { background: var(--terracotta-soft); }
   .fresh td.name::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--terracotta); }

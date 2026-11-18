@@ -5,7 +5,7 @@
 
   const { Story } = defineMeta({
     title: "Sections/MakeLinkCard", component: MakeLinkCard,
-    args: { slug: "oncall-sre", tries: 3, create: fn(async (l) => l), oncreated: fn() },
+    args: { slug: "oncall-sre", create: fn(async (l) => l), oncreated: fn() },
   });
 </script>
 
@@ -17,7 +17,6 @@
   await expect(args.create).toHaveBeenCalledWith({ slug: "oncall-sre", url: "https://pager.example.com/schedules/sre", description: "" });
   await expect(args.oncreated).toHaveBeenCalled();
 }} />
-<Story name="Nobody tried it before" args={{ tries: 0 }} />
 <Story name="Creates without an oncreated listener" args={{ oncreated: undefined }} play={async ({ args, canvas, userEvent }) => {
   await userEvent.type(canvas.getByLabelText("Destination"), "https://pager.example.com/schedules/sre");
   await userEvent.click(canvas.getByRole("button", { name: "Create link and open it" }));

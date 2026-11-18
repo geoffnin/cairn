@@ -1,10 +1,11 @@
 // Links kept in this browser (local.js), as a LinkSource for the shared manage page.
 import type { LinkSource } from "@cairn/ui/lib/links";
-import { createLink, deleteLink, listLinks, updateLink } from "../local.js";
+import { createLink, deleteLink, getLink, listLinks, updateLink } from "../local.js";
 
 export const localLinks: LinkSource = {
   shared: false,
   list: ({ q }) => listLinks(q),
+  get: (slug) => getLink(slug),
   create: (link) => createLink(link),
   async update(link, { url, description }) {
     await updateLink(link.slug, { url, description });

@@ -1,4 +1,4 @@
-<!-- The server's home: everyone's links, searchable, with how much each is used. Presentational:
+<!-- The server's home: everyone's links, searchable. Presentational:
      the app searches, filters and sorts (`oninput`, `onfilter`, `onsort`) and passes the rows. -->
 <script lang="ts">
   import type { DirectoryLink } from "../lib/links";
@@ -29,7 +29,7 @@
     onedit?: (link: DirectoryLink) => void;
   };
   let {
-    host, me, links, counts, q = $bindable(""), filter = $bindable("all"), sort = $bindable("used"), selected = $bindable(-1),
+    host, me, links, counts, q = $bindable(""), filter = $bindable("all"), sort = $bindable("updated"), selected = $bindable(-1),
     fresh = null, now, href, oninput, onfilter, onsort, onnew, onopen, oncopy, onedit,
   }: Props = $props();
   const total = $derived(filter === "mine" ? counts.mine : filter === "new" ? counts.new : counts.all);

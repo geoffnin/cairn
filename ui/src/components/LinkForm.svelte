@@ -1,9 +1,12 @@
 <!-- The New link card: name and destination side by side (stacked below 560px), description
-     below, the {*} hint, then Create and its status on one line. -->
+     below, the {*} hint, then Create and its status on one line. Beside the name, a mark says
+     whether it is free (`check`, which the parent keeps for `slug`); a taken name says so under the
+     field and is not sent. -->
 <script lang="ts">
-  import type { Link, Message, NewLink } from "../lib/links";
+  import type { Link, Message, NameCheck, NewLink } from "../lib/links";
   import Button from "./Button.svelte";
   import Card from "./Card.svelte";
+  import NameCheckMark from "./NameCheckMark.svelte";
   import Status from "./Status.svelte";
   import TextField from "./TextField.svelte";
 
@@ -13,19 +16,22 @@
     url?: string;
     description?: string;
     message?: Message | null;
+    check?: NameCheck | null;
     urlInput?: HTMLInputElement;
     oncreated?: (link: Link) => void;
   };
   let {
     create, slug = $bindable(""), url = $bindable(""), description = $bindable(""),
-    message = $bindable(null), urlInput = $bindable(), oncreated,
+    message = $bindable(null), check = null, urlInput = $bindable(), oncreated,
   }: Props = $props();
   let slugInput: HTMLInputElement | undefined = $state();
   let busy = $state(false);
+  const taken = $derived(check?.state === "taken" ? `go/${slug.trim().toLowerCase()} already exists.` : undefined);
 
   async function submit(e: SubmitEvent) {
     e.preventDefault();
     if (busy) return; // a second Enter while the first create is still on its way
+    if (taken) return slugInput?.focus();
     busy = true;
     const sent = { slug, url, description };
     try {
@@ -48,7 +54,9 @@
 <Card title="New link">
   <form onsubmit={submit}>
     <div class="grid">
-      <TextField label="Name" go bind:value={slug} bind:input={slugInput} required maxlength={64} autocomplete="off" spellcheck={false} placeholder="roadmap" />
+      <TextField label="Name" go bind:value={slug} bind:input={slugInput} required maxlength={64} autocomplete="off" spellcheck={false} placeholder="roadmap" error={taken}>
+        {#snippet trail()}<NameCheckMark {slug} {check} />{/snippet}
+      </TextField>
       <TextField label="Destination URL" mono bind:value={url} bind:input={urlInput} required maxlength={2048} autocomplete="off" spellcheck={false} placeholder="https://docs.example.com/roadmap" />
       <TextField label="Description (optional)" class="wide" bind:value={description} maxlength={500} autocomplete="off" />
     </div>
