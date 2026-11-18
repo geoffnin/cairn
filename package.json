@@ -12,19 +12,22 @@
   },
   "scripts": {
     "build": "npm run build -w web -w extension",
-    "check": "node design/build-tokens.mjs --check && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
+    "check": "node design/build-tokens.mjs --check && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings && tsc -p e2e",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build -o storybook-static",
     "test": "vitest run && npm test -w extension",
-    "tokens": "node design/build-tokens.mjs"
+    "tokens": "node design/build-tokens.mjs",
+    "e2e": "npm run build -w extension && playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@storybook/addon-a11y": "^10.6.7",
     "@storybook/addon-svelte-csf": "^5.1.6",
     "@storybook/addon-vitest": "^10.6.7",
     "@storybook/svelte-vite": "^10.6.7",
     "@testing-library/svelte": "^5.4.2",
     "@types/chrome": "^0.3.7",
+    "@types/node": "^22.20.5",
     "@vitest/browser": "^5.1.0",
     "@vitest/browser-playwright": "^5.1.0",
     "jsdom": "^31.0.1",

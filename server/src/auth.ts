@@ -10,7 +10,9 @@
 // Without either, every request is refused.
 //
 //   AUTH_MODE=access (default)  as above
-//   AUTH_MODE=dev               fixed user, honoured on localhost only, for `wrangler dev`
+//   AUTH_MODE=dev               fixed user, honoured on localhost only, for `wrangler dev`.
+//                               An X-Cairn-Dev-User header picks someone else, so end-to-end
+//                               tests can act as several people against one server.
 import { verifyJwt } from "./jwt";
 import { inSpan, type SpanHandle } from "./tracing";
 import type { Env, User } from "./types";
@@ -99,7 +101,10 @@ async function authenticateIn(req: Request, env: Env, ctx: ExecutionContext | un
   if (mode(env) === "dev") {
     span.setAttribute("auth.method", "dev");
     if (!isLocalhost(req)) throw new AuthError("AUTH_MODE=dev only works on localhost.", 500);
-    return toUser(env, env.DEV_USER_EMAIL || "dev@example.com", "Dev User", []);
+    const asked = req.headers.get("x-cairn-dev-user");
+    if (asked !== null && !/^[^\s@]+@[^\s@]+$/.test(asked)) throw new AuthError("X-Cairn-Dev-User must be an email address.", 400);
+    if (asked !== null) assertAllowed(env, asked);
+    return toUser(env, asked ?? (env.DEV_USER_EMAIL || "dev@example.com"), "Dev User", []);
   }
 
   // Present only when Access is on for this Worker and has authenticated this request.
