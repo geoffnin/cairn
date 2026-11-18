@@ -17,7 +17,7 @@
   let { selected = -1, fresh = "q4", ...callbacks }: Props = $props();
   let q = $state("");
   let filter = $state<Filter>("all");
-  let sort = $state<Sort>("used");
+  let sort = $state<Sort>("updated");
   const week = NOW.getTime() - 7 * 86_400_000;
   const isNew = (l: DirectoryLink) => Date.parse(l.updated) > week;
 
@@ -26,7 +26,7 @@
     return [...directory]
       .filter((l) => !term || [l.slug, l.url, l.description].some((v) => v.toLowerCase().includes(term)))
       .filter((l) => filter === "all" || (filter === "mine" ? l.owner === ME : isNew(l)))
-      .sort((a, b) => (sort === "name" ? a.slug.localeCompare(b.slug) : sort === "updated" ? b.updated.localeCompare(a.updated) : b.uses - a.uses))
+      .sort((a, b) => (sort === "name" ? a.slug.localeCompare(b.slug) : b.updated.localeCompare(a.updated)))
       // A link just made stays on top, where it was set down.
       .sort((a, b) => Number(b.slug === fresh) - Number(a.slug === fresh));
   });

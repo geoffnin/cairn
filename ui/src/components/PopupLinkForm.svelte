@@ -1,4 +1,4 @@
-<!-- The popup's form for a new link: name (with whether it is free), destination (the tab's
+<!-- The popup's form for a new link: name (with a mark beside it: free or taken), destination (the tab's
      address), description, Create. A taken name shows what it opens and the ways on instead of
      creating. When the destination ends in an ID, it offers to make that ID {*}, and then says what
      the link will do. The parent checks names (`onslugchange`, then `check`). -->
@@ -9,7 +9,7 @@
   import GoName from "./GoName.svelte";
   import Kbd from "./Kbd.svelte";
   import LinkButton from "./LinkButton.svelte";
-  import NameCheckNote from "./NameCheckNote.svelte";
+  import NameCheckMark from "./NameCheckMark.svelte";
   import NameTaken from "./NameTaken.svelte";
   import Status from "./Status.svelte";
   import TextField from "./TextField.svelte";
@@ -72,7 +72,7 @@
     label="Name" go bind:value={slug} bind:input={slugInput} required maxlength={64} autocomplete="off" spellcheck={false}
     oninput={() => onslugchange?.(slug)} invalid={Boolean(taken)} describedby={taken ? `${id}-taken` : undefined}
   >
-    {#snippet help()}<NameCheckNote {slug} {check} />{/snippet}
+    {#snippet trail()}<NameCheckMark {slug} {check} />{/snippet}
   </TextField>
   {#if taken}<NameTaken id="{id}-taken" link={taken.link} alternative={taken.alternative} onedit={onedittaken} onuse={useName} />{/if}
   <TextField label="Destination" note="· this tab" mono bind:value={url} required maxlength={2048} spellcheck={false}>

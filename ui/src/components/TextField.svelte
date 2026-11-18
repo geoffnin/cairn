@@ -1,9 +1,12 @@
 <!-- A labelled text input. `go` puts the go/ prefix inside the field, so typing the name
      finishes the address. `note` follows the label in muted text ("· this tab"); `action` sits at
-     the label line's end (a quiet link-button). Under the field: `error` (clay, marks the input
-     invalid), else `help` (rich), else `hint`. Both are tied to the input with aria-describedby,
-     as is `describedby` (an id elsewhere, such as a Notice). `controlAction` shares the input
-     row, so its alignment does not depend on the label or hint height. -->
+     the label line's end (a quiet link-button); `trail` sits just right of the input (a
+     NameCheckMark). `controlAction` shares the input row, so its alignment does not depend on
+     the label or hint height. Under the field: `error` (clay, marks the input invalid), else
+     `help` (rich), else `hint`. Both are tied to the input with aria-describedby, as is
+     `describedby` (an id elsewhere, such as a Notice). No field here holds a credential, so
+     password managers are told to leave them alone (1Password, LastPass, Bitwarden;
+     they ignore autocomplete="off"). -->
 <script lang="ts">
   import type { Snippet } from "svelte";
   import type { HTMLInputAttributes } from "svelte/elements";
@@ -23,12 +26,13 @@
     action?: Snippet;
     /** An action aligned with the input, independent of the label and hint height. */
     controlAction?: Snippet;
+    trail?: Snippet;
     describedby?: string;
     class?: string;
   };
   let {
     label, value = $bindable(""), input = $bindable(), go = false, mono = false,
-    note, hint, error, invalid = false, help, action, controlAction, describedby, class: className = "", type = "text", id: ownId, ...rest
+    note, hint, error, invalid = false, help, action, controlAction, trail, describedby, class: className = "", type = "text", id: ownId, ...rest
   }: Props = $props();
   const generated = $props.id();
   const id = $derived(ownId ?? generated);
@@ -43,13 +47,17 @@
     {#if action}<span class="action">{@render action()}</span>{/if}
   </div>
   <div class="control-row" class:with-action={Boolean(controlAction)}>
-    <span class="box" class:go>
-      <input
-        bind:this={input} bind:value {type} id={inputId}
-        class="cn-control" class:is-mono={mono || go}
-        aria-invalid={error || invalid ? "true" : undefined} aria-describedby={described}
-        {...rest}
-      />
+    <span class="control">
+      <span class="box" class:go>
+        <input
+          bind:this={input} bind:value {type} id={inputId}
+          class="cn-control" class:is-mono={mono || go}
+          aria-invalid={error || invalid ? "true" : undefined} aria-describedby={described}
+          data-1p-ignore data-lpignore="true" data-bwignore
+          {...rest}
+        />
+      </span>
+      {#if trail}{@render trail()}{/if}
     </span>
     {#if controlAction}{@render controlAction()}{/if}
   </div>
@@ -64,9 +72,10 @@
   .note { font-weight: 400; color: var(--ink-faint); }
   .action { font: var(--type-small); }
   .control-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
-  .control-row .box { flex: 1 1 100%; min-width: 0; }
-  .with-action .box { flex-basis: 220px; }
-  .box { position: relative; display: block; }
+  .control-row .control { flex: 1 1 100%; min-width: 0; }
+  .with-action .control { flex-basis: 220px; }
+  .control { display: flex; align-items: center; gap: var(--space-2); }
+  .box { position: relative; display: block; flex: 1; min-width: 0; }
   .go::before {
     content: "go/"; position: absolute; left: var(--space-3); top: 50%; transform: translateY(-50%);
     font-family: var(--font-mono); font-size: 13px; color: var(--ink-muted); pointer-events: none;
