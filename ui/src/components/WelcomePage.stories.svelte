@@ -7,7 +7,7 @@
     title: "Journeys/1 Welcome tab",
     component: WelcomePage,
     parameters: { layout: "fullscreen" },
-    args: { create: fn(async (l) => l), onmodechange: fn(), onimport: fn() },
+    args: { connect: fn(async () => {}), create: fn(async (l) => l), onmodechange: fn(), onimport: fn() },
   });
 </script>
 
@@ -29,4 +29,18 @@
 <Story name="Skip the first link" play={async ({ canvas, userEvent }) => {
   await userEvent.click(canvas.getByRole("button", { name: "Skip for now" }));
   await expect(canvas.getByRole("img", { name: "Step 3, current" })).toBeVisible();
+}} />
+
+<Story name="Configure a company server" play={async ({ args, canvas, userEvent }) => {
+  await userEvent.type(canvas.getByLabelText("Name"), "wiki");
+  await userEvent.click(canvas.getByText(/Everyone at work sees/));
+  await expect(canvas.getByRole("img", { name: "Step 1, current" })).toBeVisible();
+  await expect(canvas.queryByRole("button", { name: "Create link" })).not.toBeInTheDocument();
+  await userEvent.type(canvas.getByLabelText("Server URL"), "https://go.example.com");
+  await userEvent.click(canvas.getByRole("button", { name: "Use this server" }));
+  await expect(args.connect).toHaveBeenCalledWith("https://go.example.com");
+  await expect(canvas.getByRole("img", { name: "Step 1, done" })).toBeVisible();
+  await expect(canvas.getByRole("img", { name: "Step 2, current" })).toBeVisible();
+  await expect(canvas.getByRole("button", { name: "Create link" })).toBeEnabled();
+  await expect(canvas.getByLabelText("Name")).toHaveValue("wiki");
 }} />
