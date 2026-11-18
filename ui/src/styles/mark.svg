@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 540" stroke-linejoin="round" stroke-width="2">
+  <!-- The Cairn mark (components/Mark.svelte) with the brand colours fixed, for favicons and icons. -->
+  <polygon fill="#f3cb9e" stroke="#f3cb9e" points="363,5 180,88 75,268 298,145"/>
+  <polygon fill="#c48654" stroke="#c48654" points="363,5 505,235 298,145"/>
+  <polygon fill="#a5b193" stroke="#a5b193" points="298,145 505,235 205,407"/>
+  <polygon fill="#81917a" stroke="#81917a" points="75,268 298,145 205,407 48,475 8,437"/>
+  <polygon fill="#c97850" stroke="#c97850" points="505,235 552,403 448,526 405,292"/>
+  <polygon fill="#44553f" stroke="#44553f" points="205,407 405,292 448,526"/>
+  <polygon fill="#2b3d29" stroke="#2b3d29" points="48,475 205,407 448,526 95,530"/>
+</svg>

@@ -1,11 +1,19 @@
 // Local mode resolver. The redirect rule sends go/<path> here as go.html#<path>.
+// The search rule sends a web search for "go/<path>" here as go.html?search=<path, URL-encoded>;
+// that one goes on to http://go/<path>, which the redirect rule sends wherever links live.
 // Any site can link to go/ (so the page is web-accessible to all of them), but none may run it
 // in a frame: it only ever handles a top-level navigation, like the link itself.
 import "@cairn/ui/styles/global.css";
-import { parseGoPath, resolveTarget } from "../golinks.js";
+import { omniboxPath, parseGoPath, resolveTarget } from "../golinks.js";
 import { getLink } from "../local.js";
 
-if (window.top === window) {
+const searched = new URLSearchParams(location.search).get("search");
+
+if (window.top !== window) {
+  // Framed: do nothing.
+} else if (searched !== null) {
+  location.replace(`http://go/${omniboxPath(searched)}`);
+} else {
   const { slug, rest, search } = parseGoPath(location.hash.slice(1));
   const link = slug ? await getLink(slug) : null;
   if (link) {
