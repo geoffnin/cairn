@@ -44,8 +44,9 @@
         "go.html"
       ],
       "matches": [
-        "*://go/*"
-      ]
+        "<all_urls>"
+      ],
+      "use_dynamic_url": true
     }
   ]
 }

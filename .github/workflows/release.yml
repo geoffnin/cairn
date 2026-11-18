@@ -4,25 +4,30 @@ name: Release
 on:
   release:
     types: [published]
+# The build runs dependency code, so it gets a read-only token; only the upload job can write.
 permissions:
-  contents: write
+  contents: read
 jobs:
-  extension:
+  build:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
           cache: npm
           cache-dependency-path: package-lock.json
-      # extension/manifest.json holds the version; the tag must agree (v1.2.3 for 1.2.3).
+      # extension/manifest.json holds the version; the tag must be v<version> (v1.2.3 for 1.2.3).
       - name: Tag matches the extension version
         id: version
         run: |
           v=$(node -p "require('./extension/manifest.json').version")
-          if [ "${GITHUB_REF_NAME#v}" != "$v" ]; then
-            echo "::error::Release tag $GITHUB_REF_NAME does not match extension/manifest.json version $v. Bump the manifest or retag."
+          if [ "$GITHUB_REF_NAME" != "v$v" ]; then
+            echo "::error::Release tag $GITHUB_REF_NAME does not match extension/manifest.json version $v (expected v$v). Bump the manifest or retag."
             exit 1
           fi
           echo "version=$v" >> "$GITHUB_OUTPUT"
@@ -37,7 +42,21 @@ jobs:
         run: |
           (cd extension/dist/chrome && zip -qr "$GITHUB_WORKSPACE/cairn-extension-$VERSION-chrome-edge.zip" .)
           (cd extension/dist/firefox && zip -qr "$GITHUB_WORKSPACE/cairn-extension-$VERSION-firefox.zip" .)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extension-packages
+          path: cairn-extension-*.zip
+          if-no-files-found: error
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: extension-packages
       - name: Attach to the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$GITHUB_REF_NAME" cairn-extension-*.zip --clobber
+        run: gh release upload "$GITHUB_REF_NAME" cairn-extension-*.zip --clobber --repo "$GITHUB_REPOSITORY"

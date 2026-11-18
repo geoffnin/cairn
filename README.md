@@ -225,8 +225,10 @@ publish them, unlisted or private: `…-chrome-edge.zip` on the Chrome Web Store
 Add-ons, `…-firefox.zip` on Firefox Add-ons (it asks for the source code too, because the
 extension is bundled: upload the release's source archive). Then force-install it by policy.
 Set the server URL for everyone with a managed storage policy (the extension's `serverUrl`
-setting); people then only need to sign in, and local mode is not offered. Where that setting
-goes depends on how you manage the browser:
+setting); local mode is then not offered. Each person still allows the extension to reach the
+server once (the browser asks, or **Grant access** in settings) and signs in; until they do,
+the popup hands off to the server's own form and address-bar search shows no suggestions.
+Where that setting goes depends on how you manage the browser:
 
 - **Google Admin console:** under the force-installed extension's settings, paste the policy
   JSON: `{ "serverUrl": { "Value": "https://go.example.com" } }`

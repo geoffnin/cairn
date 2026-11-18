@@ -10,7 +10,7 @@
   import TextField from "@cairn/ui/components/TextField.svelte";
   import type { Message } from "@cairn/ui/lib/links";
   import { onMount } from "svelte";
-  import { LOCAL, SHARED, getState, hasServerAccess, normalizeServerUrl, probe, setMode, setServer } from "../config.js";
+  import { LOCAL, SHARED, getState, hasServerAccess, normalizeServerUrl, probe, serverOrigins, setMode, setServer } from "../config.js";
   import { ext } from "../ext.js";
   import { countLinks } from "../local.js";
   import { applyDisplay, onDisplayChange, readDisplay, saveDisplay, type Density, type Theme } from "./display";
@@ -30,7 +30,7 @@
   const say = (text: string, error = false) => (message = { text, error });
 
   // Must run straight from a click: Chrome only shows the permission prompt for a user gesture.
-  const requestAccess = (url: string) => ext.permissions.request({ origins: [`${url}/*`] }).catch(() => false);
+  const requestAccess = (url: string) => ext.permissions.request({ origins: serverOrigins(url) }).catch(() => false);
 
   // Cloudflare Access signs people in on the server's own pages; opening the site starts it.
   function signIn(srv: Server) {
@@ -137,7 +137,7 @@
     <legend>Use links from</legend>
     {#if !current?.managed}
       <ModeOption name="mode" value={LOCAL} bind:group={mode} title="This browser" onselect={() => setMode(LOCAL).then(render)}>
-        {#snippet body()}Stored only in this Chrome profile, not shared or synced · {count} link{count === 1 ? "" : "s"}{/snippet}
+        {#snippet body()}Stored only in this browser profile, not shared or synced · {count} link{count === 1 ? "" : "s"}{/snippet}
         {#snippet extra()}
           <Button onclick={() => ext.tabs.create({ url: ext.runtime.getURL("links.html") })}>Manage links</Button>
         {/snippet}

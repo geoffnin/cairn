@@ -742,7 +742,8 @@ chosen. Local links live in `chrome.storage.local` under one key.
 own `go.html#<path>` instead of a server. That page looks the name up and replaces itself with
 the destination, or with the extension's "new link" page if the name is unknown. Chrome allows
 a `declarativeNetRequest` redirect to an extension page with the path kept; this was checked in
-a test extension first. The page is web-accessible only to `go/` URLs.
+a test extension first. The page was web-accessible only to `go/` URLs; D31 opens it to every
+site, because a `go/` link clicked on a web page is checked against that page's origin.
 
 **Choices.**
 
@@ -1151,8 +1152,19 @@ and attaches `cairn-extension-<version>-chrome-edge.zip` and `…-firefox.zip` t
   redirect target came from `chrome-extension://${runtime.id}`, which is wrong in Firefox
   (its pages are `moz-extension://<per-install UUID>`, and `runtime.id` is the add-on ID), so it
   now comes from `runtime.getURL()`. Address-bar suggestions are plain text in Firefox, which
-  does not style Chrome's `<match>`/`<dim>` markup. The server's Origin check (D8) and its
-  `client.kind` attribute accept `moz-extension://`.
+  does not style Chrome's `<match>`/`<dim>` markup. Host permissions for the server leave out
+  the port in Firefox, whose match patterns do not take one. The server's Origin check (D8) and
+  its `client.kind` attribute accept `moz-extension://`.
+- *`go/` links clicked on web pages work in local mode.* Both browsers check a redirect to an
+  extension page against the origin of the page that started it, and `go.html` was accessible
+  only to `go/` URLs, so a link clicked on a wiki failed (it worked only from the address bar).
+  `go.html` is now web-accessible to all sites. In Chrome it is served at a per-session URL
+  (`use_dynamic_url`), so a site cannot use it to detect the extension; Firefox's URLs already
+  carry a per-install UUID. `go.html` does nothing inside a frame, so a site can only start the
+  same top-level navigation a link would.
+- *Least privilege in the release job.* The job that installs dependencies, builds and lints
+  has a read-only token and no stored Git credential; a separate job with no checkout uploads
+  the packages with write access.
 - *Release packages, not store uploads.* Each store has its own review, listing and credentials.
   Attaching the packages keeps submission a deliberate, manual step and keeps store secrets out
   of the repository. Firefox Add-ons asks for source code because the extension is bundled; the

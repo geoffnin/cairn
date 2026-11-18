@@ -21,6 +21,8 @@ function manifestFor(target: Target) {
     delete m.storage;
     // Firefox runs MV3 background scripts as an event page, not a service worker.
     m.background = { scripts: [m.background.service_worker], type: "module" };
+    // Firefox's extension URLs already carry a random per-install UUID.
+    for (const r of m.web_accessible_resources) delete r.use_dynamic_url;
     m.browser_specific_settings = {
       gecko: {
         // Permanent once on addons.mozilla.org; policies.json names the extension by it.

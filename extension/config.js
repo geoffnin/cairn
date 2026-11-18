@@ -83,7 +83,17 @@ export async function migrateSettings() {
   await ext.storage.sync.remove(["backends", "active"]);
 }
 
-export const hasServerAccess = (backend) => ext.permissions.contains({ origins: [`${backend.url}/*`] });
+/**
+ * Host permission for a server URL. Firefox's match patterns take no port, so there it covers
+ * the host on any port (a dev server on localhost:8787, say).
+ * @param {string} url
+ */
+export function serverOrigins(url) {
+  const { protocol, hostname } = new URL(url);
+  return [__TARGET__ === "firefox" ? `${protocol}//${hostname}/*` : `${url}/*`];
+}
+
+export const hasServerAccess = (backend) => ext.permissions.contains({ origins: serverOrigins(backend.url) });
 
 /** API call using the browser's Cloudflare Access session for the server. */
 export async function api(backend, method, path, body) {

@@ -40,7 +40,7 @@ ext.storage.onChanged.addListener((changes, area) => {
 // Address bar: "go<space>name".
 const escapeXml = (s) => s.replace(/[<>&'"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
-ext.omnibox.onInputChanged.addListener(async (text, suggest) => {
+ext.omnibox?.onInputChanged.addListener(async (text, suggest) => {
   const q = text.trim();
   if (!q) return;
   const { active } = await getState();
@@ -64,7 +64,7 @@ ext.omnibox.onInputChanged.addListener(async (text, suggest) => {
   }
 });
 
-ext.omnibox.onInputEntered.addListener((text, disposition) => {
+ext.omnibox?.onInputEntered.addListener((text, disposition) => {
   // "go jira ABC-1" behaves like go/jira/ABC-1; the redirect rule takes it from there.
   const url = `http://go/${omniboxPath(text)}`;
   if (disposition === "currentTab") ext.tabs.update({ url });
