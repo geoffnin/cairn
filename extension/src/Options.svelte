@@ -145,7 +145,7 @@
   <fieldset>
     <legend>Use links from</legend>
     {#if !current?.managed}
-      <ModeOption name="mode" value={LOCAL} bind:group={mode} title="This browser" onselect={chooseLocal}>
+      <ModeOption name="mode" value={LOCAL} bind:group={mode} disabled={saving} title="This browser" onselect={chooseLocal}>
         {#snippet body()}Stored only in this browser profile, not shared or synced · {count} link{count === 1 ? "" : "s"}{/snippet}
         {#snippet extra()}
           <Button onclick={() => ext.tabs.create({ url: ext.runtime.getURL("links.html") })}>Manage links</Button>

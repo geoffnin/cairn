@@ -33,7 +33,8 @@ async function syncRules() {
         id: SEARCH_RULE,
         priority: 1,
         action: { type: "redirect", redirect: { regexSubstitution: `${go}?search=\\1` } },
-        condition: { regexFilter: SEARCH_FILTER, resourceTypes: ["main_frame"] },
+        // Only a literal lowercase "go/": a search for "Go/…" or "GO/…" is left alone.
+        condition: { regexFilter: SEARCH_FILTER, isUrlFilterCaseSensitive: true, resourceTypes: ["main_frame"] },
       },
     ],
   });
