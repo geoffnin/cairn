@@ -29,16 +29,25 @@
     return result;
   }
 
+  let address = $state("");
+  function matchesDraft(url: string) {
+    try { return normalizeServerUrl(address) === url; }
+    catch { return false; } // Leave validation feedback to the form.
+  }
+
   async function activatePending(srv: State["pendingServer"]) {
-    if (!srv || !wantsShared) return;
+    if (!srv || !wantsShared || !matchesDraft(srv.url)) return;
     const choice = choiceRevision;
-    if (!(await hasServerAccess(srv)) || !(await probe(srv)).email) return;
-    await writeChoice(async () => {
-      const latest = await getState();
-      if (latest.managed || latest.pendingServer?.url !== srv.url || !wantsShared || choice !== choiceRevision) return;
-      // One write promotes both server and mode. A later Local choice is queued after it.
-      await setServer(srv.url);
-    });
+    const before = await getState();
+    if (before.pendingServer?.url !== srv.url) return;
+    if (!(await hasServerAccess(srv)) || !(await probe(srv, AbortSignal.timeout(10_000))).email) return;
+    await writeChoice(() => setServer(srv.url, true, (latest: State) =>
+      Boolean(latest.pendingServer) && latest.mode === before.mode && wantsShared && choice === choiceRevision && matchesDraft(srv.url),
+    ));
+  }
+
+  function startActivation(srv: State["pendingServer"]) {
+    void activatePending(srv).catch((err) => say(err.message, true)).finally(() => { void render(); });
   }
   let count = $state(0);
   let status = $state<ServerStatus | null>(null);
@@ -89,8 +98,8 @@
     const n = state.managed ? 0 : await countLinks();
     if (seq !== renderSeq) return; // a newer render finished first
     // Show what is saved straight away; asking the server how it is can take a while.
-    if (current?.server?.url !== state.server?.url) status = null;
-    if (!current) wantsShared = state.mode === SHARED;
+    if ((current?.pendingServer ?? current?.server)?.url !== (state.pendingServer ?? state.server)?.url) status = null;
+    if (!current && choiceRevision === 0) wantsShared = state.mode === SHARED;
     current = state;
     mode = state.mode;
     count = n;
@@ -108,12 +117,12 @@
 
   async function chooseShared() {
     wantsShared = true;
-    choiceRevision++;
+    const choice = ++choiceRevision;
     try {
       const state = await getState();
-      if (state.pendingServer) await activatePending(state.pendingServer);
-      else if (state.server) await writeChoice(() => wantsShared ? setMode(SHARED) : Promise.resolve());
-      else say("Enter your company's Cairn server address. It saves automatically; choose Authenticate to sign in.");
+      if (state.server) await writeChoice(() => wantsShared && choice === choiceRevision ? setMode(SHARED) : Promise.resolve());
+      if (state.pendingServer) startActivation(state.pendingServer);
+      else if (!state.server) say("Enter your company's Cairn server address. It saves automatically; choose Authenticate to sign in.");
     } catch (err) { say((err as Error).message, true); }
     await render();
   }
@@ -122,7 +131,7 @@
     if (current?.managed) return;
     try {
       await setPendingServer(url);
-      await activatePending({ kind: "server", url, label: new URL(url).host });
+      startActivation({ kind: "server", url, label: new URL(url).host });
     } finally { void render(); }
   }
 
@@ -137,7 +146,13 @@
   const changeDisplay = () => saveDisplay($state.snapshot(display));
 
   onMount(() => {
-    const listener = () => render();
+    const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area === "sync" && changes.mode?.newValue === LOCAL && changes.mode.oldValue !== LOCAL) {
+        wantsShared = false;
+        choiceRevision++;
+      }
+      void render();
+    };
     chrome.storage.onChanged.addListener(listener);
     // Coming back from the sign-in tab: show the new state.
     window.addEventListener("focus", returnFromAuthentication);
@@ -183,7 +198,7 @@
         {#if status}<span class:error={status.warn}>{status.text}</span>{/if}
       {/snippet}
       {#snippet extra()}
-        <ServerSetup bind:serverUrl {saveServer} onedit={editServer} authenticate={authenticateServer} onauthmessage={sayAuthentication} disabled={current?.managed} />
+        <ServerSetup bind:serverUrl bind:address {saveServer} onedit={editServer} authenticate={authenticateServer} onauthmessage={sayAuthentication} disabled={current?.managed} />
       {/snippet}
     </ModeOption>
     <Status {message} />

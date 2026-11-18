@@ -8,6 +8,8 @@
 
   type Props = {
     serverUrl?: string;
+    /** The current draft, including edits that have not been saved or validated. */
+    address?: string;
     saveServer: (url: string) => Promise<void>;
     authenticate?: (url: string) => void | Promise<void>;
     disabled?: boolean;
@@ -16,10 +18,11 @@
     /** Lets the host replace sign-in feedback after probing the server on return. */
     onauthmessage?: (text: string, error?: boolean) => void;
   };
-  let { serverUrl = $bindable(""), saveServer, authenticate = (url) => {
+  let { serverUrl = $bindable(""), address = $bindable(""), saveServer, authenticate = (url) => {
     window.open(serverAuthenticationUrl(url), "_blank", "noopener,noreferrer");
   }, disabled = false, onsaved, onedit, onauthmessage }: Props = $props();
-  let address = $state(serverUrl);
+  // Seed once; incoming saved URLs must go through the dirty-edit guard below.
+  address = serverUrl;
   let error = $state("");
   let message = $state<Message | null>(null);
   let authMessage = $state<Message | null>(null);
@@ -36,7 +39,7 @@
   let lastPersistedUrl = serverUrl;
   let saveFailed = false;
   let queue = Promise.resolve();
-  let inFlight: { url: string; promise: Promise<boolean> } | null = null;
+  let inFlight: { url: string; edited: number; promise: Promise<boolean> } | null = null;
   $effect.pre(() => {
     const saved = serverUrl;
     if (saved === observedUrl) return;
@@ -52,12 +55,12 @@
   }
 
   function persist(url: string): Promise<boolean> {
-    if (inFlight?.url === url) return inFlight.promise;
+    if (inFlight?.url === url) { inFlight.edited = editRevision; return inFlight.promise; }
     if (!inFlight && !saveFailed && lastPersistedUrl === url) {
       address = url; cleanEditRevision = editRevision; return Promise.resolve(true);
     }
     const seq = ++revision;
-    const edited = editRevision;
+    const save = { url, edited: editRevision, promise: Promise.resolve(false) };
     message = { text: "Saving server address…" };
     // Serialize writes so a slower old save cannot overwrite a newer address.
     const promise = queue.then(async () => {
@@ -68,9 +71,9 @@
           saveFailed = false;
           observedUrl = url;
           serverUrl = url;
-          if (edited === editRevision) { address = url; cleanEditRevision = edited; }
+          if (save.edited === editRevision) { address = url; cleanEditRevision = save.edited; }
           onsaved?.(url);
-          if (edited === editRevision) message = { text: "Server address saved." };
+          if (save.edited === editRevision) message = { text: "Server address saved." };
         }
         return true;
       } catch (err) {
@@ -81,7 +84,8 @@
       }
     });
     queue = promise.then(() => {});
-    inFlight = { url, promise };
+    save.promise = promise;
+    inFlight = save;
     return promise;
   }
 

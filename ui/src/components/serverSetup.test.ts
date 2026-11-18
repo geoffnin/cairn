@@ -161,4 +161,22 @@ describe("server address persistence and authentication", () => {
     expect(local.checked).toBe(true);
   });
 
+  it.each([false, true])("marks the latest blur of an in-flight URL clean unless edited again (%s)", async (editAgain) => {
+    const pending = deferred();
+    const saveServer = vi.fn(() => pending.promise);
+    const { rerender } = render(ServerSetup, { saveServer });
+    const input = screen.getByLabelText("Server URL") as HTMLInputElement;
+    await fireEvent.input(input, { target: { value: "a.example.com" } });
+    await fireEvent.blur(input);
+    await waitFor(() => expect(saveServer).toHaveBeenCalledTimes(1));
+    await fireEvent.input(input, { target: { value: "a.example.com/path" } });
+    await fireEvent.blur(input);
+    if (editAgain) await fireEvent.input(input, { target: { value: "http://invalid.example.com" } });
+    pending.resolve();
+    if (!editAgain) await screen.findByText("Server address saved.");
+    await rerender({ serverUrl: "https://external.example.com" });
+    expect(input.value).toBe(editAgain ? "http://invalid.example.com" : "https://external.example.com");
+    expect(saveServer).toHaveBeenCalledTimes(1);
+  });
+
 });

@@ -61,18 +61,29 @@ export async function getState() {
 
 export const backendId = (b) => (b.kind === "local" ? LOCAL : SHARED);
 
-/** Commit a verified server and clear its pending address in the same storage write. */
-export function setServer(url, activate = true) {
-  return chrome.storage.sync.set(activate ? { serverUrl: url, pendingServerUrl: null, mode: SHARED } : { serverUrl: url, pendingServerUrl: null });
+// Web Locks serialize read/modify/write operations across extension pages.
+const writeSettings = (write) => navigator.locks.request("cairn-settings", write);
+
+/** Commit a verified server, retaining any newer draft saved by another Settings page. */
+export function setServer(url, activate = true, canCommit = (_state) => true) {
+  return writeSettings(async () => {
+    const state = await getState();
+    if (state.managed || !canCommit(state)) return false;
+    const update = { serverUrl: url };
+    if (state.pendingServer?.url === url) update.pendingServerUrl = null;
+    if (activate) update.mode = SHARED;
+    await chrome.storage.sync.set(update);
+    return true;
+  });
 }
 
 /** Autosave a draft without changing the server used by links and suggestions. */
 export function setPendingServer(url) {
-  return chrome.storage.sync.set({ pendingServerUrl: url });
+  return writeSettings(() => chrome.storage.sync.set({ pendingServerUrl: url }));
 }
 
 export function setMode(mode) {
-  return chrome.storage.sync.set({ mode: mode === SHARED ? SHARED : LOCAL });
+  return writeSettings(() => chrome.storage.sync.set({ mode: mode === SHARED ? SHARED : LOCAL }));
 }
 
 /**
@@ -93,11 +104,12 @@ export async function migrateSettings() {
 export const hasServerAccess = (backend) => chrome.permissions.contains({ origins: [`${backend.url}/*`] });
 
 /** API call using the browser's Cloudflare Access session for the server. */
-export async function api(backend, method, path, body) {
+export async function api(backend, method, path, body, signal = undefined) {
   let res;
   try {
     res = await fetch(`${backend.url}/_/api${path}`, {
       method,
+      signal,
       credentials: "include",
       headers: { "content-type": "application/json", "x-cairn-request": "1" },
       body: body ? JSON.stringify(body) : undefined,
@@ -120,9 +132,9 @@ export async function api(backend, method, path, body) {
  * Who is signed in to this server: { email } when signed in, { signedOut: true } when Access
  * wants a sign-in (or the server is unreachable), { error } when it is not a Cairn server.
  */
-export async function probe(backend) {
+export async function probe(backend, signal = AbortSignal.timeout(10_000)) {
   try {
-    const me = await api(backend, "GET", "/me");
+    const me = await api(backend, "GET", "/me", undefined, signal);
     return typeof me.email === "string" ? { email: me.email } : { error: `${backend.label} is not a Cairn server.` };
   } catch (err) {
     return err.status === 401 ? { signedOut: true } : { error: err.message };
