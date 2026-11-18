@@ -316,6 +316,9 @@ extension/src/              the popup, settings and manage pages; extension/publ
   nobody has made yet, and one link's page with its usage and change history. Some stories are
   wired to links in memory, so a journey can be clicked through.
 
+Each push to `main` that passes CI publishes Storybook to GitHub Pages, at
+https://geoffnin.github.io/cairn/.
+
 The toolbar switches theme (light, dark) and density. Every story is also a test: `npm test`
 renders each one in Chromium, runs its play function (the interactions it describes, with their
 expectations) and checks it for accessibility problems with axe, failing on any. The Accessibility,
