@@ -7,45 +7,87 @@
   import Page from "@cairn/ui/components/Page.svelte";
   import Segmented from "@cairn/ui/components/Segmented.svelte";
   import Status from "@cairn/ui/components/Status.svelte";
-  import TextField from "@cairn/ui/components/TextField.svelte";
+  import ServerSetup from "@cairn/ui/components/ServerSetup.svelte";
   import type { Message } from "@cairn/ui/lib/links";
   import { onMount } from "svelte";
-  import { LOCAL, SHARED, getState, hasServerAccess, normalizeServerUrl, probe, setMode, setServer } from "../config.js";
+  import { LOCAL, SHARED, getState, hasServerAccess, normalizeServerUrl, serverAuthenticationUrl, probe, setMode, setServer, setPendingServer } from "../config.js";
   import { countLinks } from "../local.js";
   import { applyDisplay, onDisplayChange, readDisplay, saveDisplay, type Density, type Theme } from "./display";
 
   type State = Awaited<ReturnType<typeof getState>>;
   type Server = NonNullable<State["server"]>;
-  type ServerStatus = { text: string; warn?: boolean; action?: "grant" | "signin" };
+  type ServerStatus = { text: string; warn?: boolean };
 
   let current = $state<State | null>(null); // as last shown, so clicks can respond without waiting
   let mode = $state(LOCAL);
+  let wantsShared = false;
+  let choiceRevision = 0;
+  let choiceQueue = Promise.resolve();
+  function writeChoice<T>(write: () => Promise<T>): Promise<T> {
+    const result = choiceQueue.then(write);
+    choiceQueue = result.then(() => {}, () => {});
+    return result;
+  }
+
+  let address = $state("");
+  function matchesDraft(url: string) {
+    try { return normalizeServerUrl(address) === url; }
+    catch { return false; } // Leave validation feedback to the form.
+  }
+
+  async function activatePending(srv: State["pendingServer"]) {
+    if (!srv || !wantsShared || !matchesDraft(srv.url)) return;
+    const choice = choiceRevision;
+    const before = await getState();
+    if (before.pendingServer?.url !== srv.url) return;
+    if (!(await hasServerAccess(srv)) || !(await probe(srv, AbortSignal.timeout(10_000))).email) return;
+    await writeChoice(() => setServer(srv.url, true, (latest: State) =>
+      Boolean(latest.pendingServer) && latest.mode === before.mode && wantsShared && choice === choiceRevision && matchesDraft(srv.url),
+    ));
+  }
+
+  function startActivation(srv: State["pendingServer"]) {
+    void activatePending(srv).catch((err) => say(err.message, true)).finally(() => { void render(); });
+  }
   let count = $state(0);
   let status = $state<ServerStatus | null>(null);
   let serverUrl = $state("");
-  let serverInput: HTMLInputElement | undefined = $state();
-  let saving = $state(false);
   let message = $state<Message | null>(null);
   const say = (text: string, error = false) => (message = { text, error });
+  let authenticationOrigin: string | null = null;
+  const sayAuthentication = (text: string, error = false) =>
+    say(error ? text : `${text} This page updates when you come back.`, error);
+
+  function editServer(address: string) {
+    wantsShared = true;
+    choiceRevision++;
+    let origin: string;
+    try { origin = normalizeServerUrl(address); }
+    catch { return; } // Validation feedback belongs to the field.
+    if (authenticationOrigin && authenticationOrigin !== origin) {
+      authenticationOrigin = null;
+      message = null;
+    }
+  }
 
   // Must run straight from a click: Chrome only shows the permission prompt for a user gesture.
   const requestAccess = (url: string) => chrome.permissions.request({ origins: [`${url}/*`] }).catch(() => false);
 
-  // Cloudflare Access signs people in on the server's own pages; opening the site starts it.
-  function signIn(srv: Server) {
-    chrome.tabs.create({ url: `${srv.url}/_/` });
-    say(`Sign in to ${srv.label} in the tab that just opened. This page updates when you come back.`);
+  async function authenticateServer(url: string) {
+    authenticationOrigin = url;
+    if (!(await requestAccess(url))) throw new Error(`Cairn needs permission to reach ${new URL(url).host} to use it.`);
+    await chrome.tabs.create({ url: serverAuthenticationUrl(url) });
   }
 
   async function sharedStatus(srv: Server): Promise<ServerStatus> {
-    if (!(await hasServerAccess(srv))) return { text: "Needs permission to reach this server.", warn: true, action: "grant" };
+    if (!(await hasServerAccess(srv))) return { text: "Needs permission to reach this server.", warn: true };
     const p = await probe(srv);
     if (p.email) {
       // Back from the sign-in tab: replace the "sign in" prompt with the outcome.
-      if (message?.text.startsWith(`Sign in to ${srv.label}`)) say(`Signed in to ${srv.label} as ${p.email}.`);
+      if (authenticationOrigin === srv.url && message?.text.startsWith(`Sign in to ${srv.label}`)) say(`Signed in to ${srv.label} as ${p.email}.`);
       return { text: `Signed in as ${p.email}.` };
     }
-    if (p.signedOut) return { text: "Not signed in (or the server is not reachable).", warn: true, action: "signin" };
+    if (p.signedOut) return { text: "Not signed in (or the server is not reachable).", warn: true };
     return { text: p.error, warn: true };
   }
 
@@ -56,51 +98,47 @@
     const n = state.managed ? 0 : await countLinks();
     if (seq !== renderSeq) return; // a newer render finished first
     // Show what is saved straight away; asking the server how it is can take a while.
-    if (current?.server?.url !== state.server?.url) status = null;
+    if ((current?.pendingServer ?? current?.server)?.url !== (state.pendingServer ?? state.server)?.url) status = null;
+    if (!current && choiceRevision === 0) wantsShared = state.mode === SHARED;
     current = state;
     mode = state.mode;
     count = n;
-    if (document.activeElement !== serverInput) serverUrl = state.server?.url ?? "";
-    const s = state.server ? await sharedStatus(state.server) : null;
+    const configured = state.pendingServer ?? state.server;
+    serverUrl = configured?.url ?? "";
+    const s = configured ? await sharedStatus(configured) : null;
     if (seq === renderSeq) status = s;
   }
 
-  function chooseShared() {
-    if (current?.server) return void setMode(SHARED).then(render);
-    // Nothing to switch to yet: keep local mode until a server is saved.
-    mode = LOCAL;
-    serverInput?.focus();
-    say("Enter your company's Cairn server address, then choose Use this server.");
+  function chooseLocal() {
+    wantsShared = false;
+    choiceRevision++;
+    void writeChoice(() => setMode(LOCAL)).then(render).catch((err) => say(err.message, true));
   }
 
-  async function useServer(e: SubmitEvent) {
-    e.preventDefault();
-    let url: string;
+  async function chooseShared() {
+    wantsShared = true;
+    const choice = ++choiceRevision;
     try {
-      url = normalizeServerUrl(serverUrl);
-    } catch (err) {
-      return say((err as Error).message, true);
-    }
-    // Ask first, while the click still counts as a user gesture.
-    if (!(await requestAccess(url))) return say(`Cairn needs permission to reach ${new URL(url).host} to use it.`, true);
-    saving = true;
-    try {
-      const srv = { kind: "server", url, label: new URL(url).host } as Server;
-      const p = await probe(srv);
-      if (p.error) return say(p.error, true);
-      await setServer(url);
-      serverInput?.blur();
-      if (p.email) say(`Using ${srv.label}, signed in as ${p.email}. Type go/ in the address bar.`);
-      else signIn(srv);
-    } finally {
-      saving = false;
-      render();
-    }
+      const state = await getState();
+      if (state.server) await writeChoice(() => wantsShared && choice === choiceRevision ? setMode(SHARED) : Promise.resolve());
+      if (state.pendingServer) startActivation(state.pendingServer);
+      else if (!state.server) say("Enter your company's Cairn server address. It saves automatically; choose Authenticate to sign in.");
+    } catch (err) { say((err as Error).message, true); }
+    await render();
   }
 
-  async function grantAccess(srv: Server) {
-    if (await requestAccess(srv.url)) say(`Access granted for ${srv.label}.`);
-    render();
+  async function saveServer(url: string) {
+    if (current?.managed) return;
+    try {
+      await setPendingServer(url);
+      startActivation({ kind: "server", url, label: new URL(url).host });
+    } finally { void render(); }
+  }
+
+  async function returnFromAuthentication() {
+    try { await activatePending((await getState()).pendingServer); }
+    catch (err) { say((err as Error).message, true); }
+    await render();
   }
 
   // Theme and density take effect at once, on every extension page.
@@ -108,10 +146,16 @@
   const changeDisplay = () => saveDisplay($state.snapshot(display));
 
   onMount(() => {
-    const listener = () => render();
+    const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area === "sync" && changes.mode?.newValue === LOCAL && changes.mode.oldValue !== LOCAL) {
+        wantsShared = false;
+        choiceRevision++;
+      }
+      void render();
+    };
     chrome.storage.onChanged.addListener(listener);
     // Coming back from the sign-in tab: show the new state.
-    window.addEventListener("focus", listener);
+    window.addEventListener("focus", returnFromAuthentication);
     const stopDisplay = onDisplayChange((d) => {
       display = d;
       applyDisplay(d);
@@ -119,7 +163,7 @@
     render();
     return () => {
       chrome.storage.onChanged.removeListener(listener);
-      window.removeEventListener("focus", listener);
+      window.removeEventListener("focus", returnFromAuthentication);
       stopDisplay();
     };
   });
@@ -135,7 +179,7 @@
   <fieldset>
     <legend>Use links from</legend>
     {#if !current?.managed}
-      <ModeOption name="mode" value={LOCAL} bind:group={mode} title="This browser" onselect={() => setMode(LOCAL).then(render)}>
+      <ModeOption name="mode" value={LOCAL} bind:group={mode} title="This browser" onselect={() => { if (wantsShared) chooseLocal(); }} onactivate={chooseLocal}>
         {#snippet body()}Stored only in this Chrome profile, not shared or synced · {count} link{count === 1 ? "" : "s"}{/snippet}
         {#snippet extra()}
           <Button onclick={() => chrome.tabs.create({ url: chrome.runtime.getURL("links.html") })}>Manage links</Button>
@@ -148,23 +192,13 @@
     >
       {#snippet body()}
         <span>Everyone at your company sees the same links. You sign in with your company account through Cloudflare Access.</span>
+        {#if current?.pendingServer}
+          <span>New address saved. Authenticate to use it.{current.mode === SHARED && current.server ? ` Links still use ${current.server.label}.` : ""}</span>
+        {/if}
         {#if status}<span class:error={status.warn}>{status.text}</span>{/if}
       {/snippet}
       {#snippet extra()}
-        <form class="server" onsubmit={useServer}>
-          <TextField
-            label="Server URL" mono bind:value={serverUrl} bind:input={serverInput} disabled={current?.managed}
-            placeholder="https://go.example.com" spellcheck={false} autocomplete="off"
-          />
-          {#if !current?.managed}<Button variant="primary" type="submit" disabled={saving}>Use this server</Button>{/if}
-        </form>
-        {#if current?.server && status?.action === "grant"}
-          {@const srv = current.server}
-          <Button onclick={() => grantAccess(srv)}>Grant access</Button>
-        {:else if current?.server && status?.action === "signin"}
-          {@const srv = current.server}
-          <Button onclick={() => signIn(srv)}>Sign in</Button>
-        {/if}
+        <ServerSetup bind:serverUrl bind:address {saveServer} onedit={editServer} authenticate={authenticateServer} onauthmessage={sayAuthentication} disabled={current?.managed} />
       {/snippet}
     </ModeOption>
     <Status {message} />
@@ -195,7 +229,6 @@
   fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
   h2, legend { font: var(--type-heading); padding: 0; }
   legend { margin-bottom: var(--space-3); }
-  .server { display: flex; align-items: flex-end; flex-wrap: wrap; gap: var(--space-2); flex: 1 1 100%; }
   .error { color: var(--clay); }
   .display { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) var(--space-3); }
 </style>

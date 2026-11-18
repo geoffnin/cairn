@@ -1,6 +1,7 @@
 // Where links live, and talking to the Cairn server.
 //
 //   storage.sync    mode:      "local" | "shared"
+//                   pendingServerUrl: autosaved address awaiting permission and sign-in
 //                   serverUrl: the company's Cairn server, used in shared mode
 //   storage.managed serverUrl  set by policy; forces shared mode with that server
 //
@@ -8,8 +9,8 @@
 // Cloudflare Access. The extension holds no credentials: the browser's Access session signs in
 // redirects and API calls.
 
-import { normalizeServerUrl } from "../ui/src/lib/server.js";
-export { normalizeServerUrl };
+import { normalizeServerUrl, serverAuthenticationUrl } from "../ui/src/lib/server.js";
+export { normalizeServerUrl, serverAuthenticationUrl };
 
 export const LOCAL = "local";
 export const SHARED = "shared";
@@ -36,14 +37,14 @@ async function managedServerUrl() {
 /** @typedef {LocalBackend | ServerBackend} Backend */
 
 /**
- * @returns {Promise<{ mode: string, server: ServerBackend|null, active: Backend, choices: Backend[], managed: boolean }>}
+ * @returns {Promise<{ mode: string, server: ServerBackend|null, pendingServer: ServerBackend|null, active: Backend, choices: Backend[], managed: boolean }>}
  * `choices` is what the popup can switch between: this browser, plus the server once one is set.
  */
 export async function getState() {
-  const [managedUrl, sync] = await Promise.all([managedServerUrl(), chrome.storage.sync.get(["mode", "serverUrl"])]);
+  const [managedUrl, sync] = await Promise.all([managedServerUrl(), chrome.storage.sync.get(["mode", "serverUrl", "pendingServerUrl"])]);
   if (managedUrl) {
     const pinned = server(managedUrl);
-    return { mode: SHARED, server: pinned, active: pinned, choices: [pinned], managed: true };
+    return { mode: SHARED, server: pinned, pendingServer: null, active: pinned, choices: [pinned], managed: true };
   }
   let srv = null;
   try {
@@ -51,19 +52,38 @@ export async function getState() {
   } catch {
     /* ignore a bad stored value */
   }
+  let pendingServer = null;
+  try { pendingServer = sync.pendingServerUrl ? server(normalizeServerUrl(sync.pendingServerUrl)) : null; }
+  catch { /* ignore an invalid pending address */ }
   const mode = sync.mode === SHARED && srv ? SHARED : LOCAL;
-  return { mode, server: srv, active: mode === SHARED ? srv : LOCAL_BACKEND, choices: srv ? [LOCAL_BACKEND, srv] : [LOCAL_BACKEND], managed: false };
+  return { mode, server: srv, pendingServer, active: mode === SHARED ? srv : LOCAL_BACKEND, choices: srv ? [LOCAL_BACKEND, srv] : [LOCAL_BACKEND], managed: false };
 }
 
 export const backendId = (b) => (b.kind === "local" ? LOCAL : SHARED);
 
-/** Use this server for shared mode, and switch to it. */
-export function setServer(url) {
-  return chrome.storage.sync.set({ serverUrl: url, mode: SHARED });
+// Web Locks serialize read/modify/write operations across extension pages.
+const writeSettings = (write) => navigator.locks.request("cairn-settings", write);
+
+/** Commit a verified server, retaining any newer draft saved by another Settings page. */
+export function setServer(url, activate = true, canCommit = (_state) => true) {
+  return writeSettings(async () => {
+    const state = await getState();
+    if (state.managed || !canCommit(state)) return false;
+    const update = { serverUrl: url };
+    if (state.pendingServer?.url === url) update.pendingServerUrl = null;
+    if (activate) update.mode = SHARED;
+    await chrome.storage.sync.set(update);
+    return true;
+  });
+}
+
+/** Autosave a draft without changing the server used by links and suggestions. */
+export function setPendingServer(url) {
+  return writeSettings(() => chrome.storage.sync.set({ pendingServerUrl: url }));
 }
 
 export function setMode(mode) {
-  return chrome.storage.sync.set({ mode: mode === SHARED ? SHARED : LOCAL });
+  return writeSettings(() => chrome.storage.sync.set({ mode: mode === SHARED ? SHARED : LOCAL }));
 }
 
 /**
@@ -84,11 +104,12 @@ export async function migrateSettings() {
 export const hasServerAccess = (backend) => chrome.permissions.contains({ origins: [`${backend.url}/*`] });
 
 /** API call using the browser's Cloudflare Access session for the server. */
-export async function api(backend, method, path, body) {
+export async function api(backend, method, path, body, signal = undefined) {
   let res;
   try {
     res = await fetch(`${backend.url}/_/api${path}`, {
       method,
+      signal,
       credentials: "include",
       headers: { "content-type": "application/json", "x-cairn-request": "1" },
       body: body ? JSON.stringify(body) : undefined,
@@ -111,9 +132,9 @@ export async function api(backend, method, path, body) {
  * Who is signed in to this server: { email } when signed in, { signedOut: true } when Access
  * wants a sign-in (or the server is unreachable), { error } when it is not a Cairn server.
  */
-export async function probe(backend) {
+export async function probe(backend, signal = AbortSignal.timeout(10_000)) {
   try {
-    const me = await api(backend, "GET", "/me");
+    const me = await api(backend, "GET", "/me", undefined, signal);
     return typeof me.email === "string" ? { email: me.email } : { error: `${backend.label} is not a Cairn server.` };
   } catch (err) {
     return err.status === 401 ? { signedOut: true } : { error: err.message };

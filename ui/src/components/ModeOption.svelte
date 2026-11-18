@@ -10,15 +10,17 @@
     title: string;
     disabled?: boolean;
     onselect?: () => void;
+    /** Fires even when the selected radio is activated again. */
+    onactivate?: () => void;
     body?: Snippet;
     extra?: Snippet;
   };
-  let { name, value, group = $bindable(), title, disabled = false, onselect, body, extra }: Props = $props();
+  let { name, value, group = $bindable(), title, disabled = false, onselect, onactivate, body, extra }: Props = $props();
   const id = $props.id();
 </script>
 
 <div class="mode" class:chosen={group === value} class:disabled>
-  <input type="radio" id="{id}-radio" {name} {value} {disabled} bind:group onchange={onselect}
+  <input type="radio" id="{id}-radio" {name} {value} {disabled} bind:group onchange={onselect} onclick={onactivate}
     aria-labelledby="{id}-title" aria-describedby={body ? `${id}-body` : undefined} />
   <label for="{id}-radio">
     <span id="{id}-title">{title}</span>

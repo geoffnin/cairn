@@ -7,7 +7,7 @@
     title: "Journeys/1 Welcome tab",
     component: WelcomePage,
     parameters: { layout: "fullscreen" },
-    args: { connect: fn(async () => {}), create: fn(async (l) => l), onmodechange: fn(), onimport: fn() },
+    args: { saveServer: fn(async () => {}), authenticate: fn(), create: fn(async (l) => l), onmodechange: fn(), onimport: fn() },
   });
 </script>
 
@@ -36,9 +36,9 @@
   await userEvent.click(canvas.getByText(/Everyone at work sees/));
   await expect(canvas.getByRole("img", { name: "Step 1, current" })).toBeVisible();
   await expect(canvas.queryByRole("button", { name: "Create link" })).not.toBeInTheDocument();
-  await userEvent.type(canvas.getByLabelText("Server URL"), "https://go.example.com");
-  await userEvent.click(canvas.getByRole("button", { name: "Use this server" }));
-  await expect(args.connect).toHaveBeenCalledWith("https://go.example.com");
+  await userEvent.type(canvas.getByLabelText("Server URL"), "go.example.com");
+  await userEvent.tab();
+  await expect(args.saveServer).toHaveBeenCalledWith("https://go.example.com");
   await expect(canvas.getByRole("img", { name: "Step 1, done" })).toBeVisible();
   await expect(canvas.getByRole("img", { name: "Step 2, current" })).toBeVisible();
   await expect(canvas.getByRole("button", { name: "Create link" })).toBeEnabled();
