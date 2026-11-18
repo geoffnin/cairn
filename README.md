@@ -202,13 +202,17 @@ export yet, so links made in local mode stay in local mode.
 
 **Shared mode** uses your company's Cairn server instead, so everyone sees the same links:
 
-1. In settings, under **Shared**, enter the server address. It saves automatically when you
-   leave the field. Bare addresses use HTTPS; `localhost:8787` (and loopback IP addresses)
-   use HTTP for local development. Pasted paths are removed because Cairn uses the server origin.
+1. In settings, select **Shared** (including when its address is already saved), then enter the
+   server address. It saves automatically when you leave the field. Bare addresses use HTTPS;
+   `localhost`, `127.0.0.1`, and `[::1]` use HTTP for local development. Other loopback addresses,
+   such as `127.0.0.2`, do not default to HTTP. Pasted paths are removed because Cairn uses the
+   server origin. A replacement address stays pending while existing shared links keep using
+   the previous server, until permission and sign-in to the replacement are confirmed.
 2. Choose **Authenticate** and allow Chrome's permission to reach your server.
 3. A new tab opens at `/_/auth/complete/`, behind Cloudflare Access. Sign in with your company
    account if needed, then close the confirmation tab and return to the extension. Links,
    the toolbar popup and address-bar search use that sign-in until the Access session expires.
+   Re-entering an unchanged address or authenticating alone does not select Shared mode.
 
 There is one server at a time. Switch between this browser and shared in settings or in the
 toolbar popup; the other side's links are kept, just not used.

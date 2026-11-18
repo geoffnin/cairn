@@ -7,9 +7,14 @@ export function normalizeServerUrl(raw) {
     if (/^[a-z][a-z\d+.-]*:/i.test(address) && !/^[^/:]+:\d+(?:[/?#]|$)/.test(address)) {
       throw new Error("Enter a server address using https://, or http:// for localhost");
     }
-    const host = address.replace(/^\/\//, "").split(/[/?#]/)[0];
-    const local = /^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(host) || /^\[::1\](:\d+)?$/.test(host);
-    address = `${local ? "http" : "https"}://${address.replace(/^\/\//, "")}`;
+    const bare = address.replace(/^\/\//, "");
+    if (/^[\/\\]/.test(bare)) throw new Error("Enter a server address, not a relative path");
+    // Parse before choosing the scheme so equivalent IPv6 spellings share a default.
+    let hostname;
+    try { hostname = new URL(`https://${bare}`).hostname; }
+    catch { throw new Error("Enter a server address, like go.example.com or localhost:8787"); }
+    const local = ["localhost", "127.0.0.1", "[::1]"].includes(hostname);
+    address = `${local ? "http" : "https"}://${bare}`;
   }
   let url;
   try { url = new URL(address); }

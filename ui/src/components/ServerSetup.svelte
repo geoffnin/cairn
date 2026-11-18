@@ -31,11 +31,19 @@
   let input: HTMLInputElement | undefined = $state();
   let revision = 0;
   let editRevision = 0;
+  let cleanEditRevision = 0;
+  let observedUrl = serverUrl;
+  let lastPersistedUrl = serverUrl;
+  let saveFailed = false;
   let queue = Promise.resolve();
   let inFlight: { url: string; promise: Promise<boolean> } | null = null;
   $effect.pre(() => {
     const saved = serverUrl;
-    if (document.activeElement !== input) address = saved;
+    if (saved === observedUrl) return;
+    observedUrl = saved;
+    lastPersistedUrl = saved;
+    // External updates must not erase a newer (possibly invalid) edit.
+    if (editRevision === cleanEditRevision) { address = saved; error = ""; }
   });
 
   function readAddress() {
@@ -45,7 +53,9 @@
 
   function persist(url: string): Promise<boolean> {
     if (inFlight?.url === url) return inFlight.promise;
-    if (!inFlight && serverUrl === url) { address = url; return Promise.resolve(true); }
+    if (!inFlight && !saveFailed && lastPersistedUrl === url) {
+      address = url; cleanEditRevision = editRevision; return Promise.resolve(true);
+    }
     const seq = ++revision;
     const edited = editRevision;
     message = { text: "Saving server address…" };
@@ -53,15 +63,18 @@
     const promise = queue.then(async () => {
       try {
         await saveServer(url);
+        lastPersistedUrl = url;
         if (seq === revision) {
+          saveFailed = false;
+          observedUrl = url;
           serverUrl = url;
-          if (document.activeElement !== input) address = url;
+          if (edited === editRevision) { address = url; cleanEditRevision = edited; }
           onsaved?.(url);
           if (edited === editRevision) message = { text: "Server address saved." };
         }
         return true;
       } catch (err) {
-        if (seq === revision) message = { text: (err as Error).message, error: true };
+        if (seq === revision) { saveFailed = true; message = { text: (err as Error).message, error: true }; }
         return false;
       } finally {
         if (seq === revision) inFlight = null;

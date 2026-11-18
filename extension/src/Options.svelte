@@ -10,7 +10,7 @@
   import ServerSetup from "@cairn/ui/components/ServerSetup.svelte";
   import type { Message } from "@cairn/ui/lib/links";
   import { onMount } from "svelte";
-  import { LOCAL, SHARED, getState, hasServerAccess, serverAuthenticationUrl, probe, setMode, setServer } from "../config.js";
+  import { LOCAL, SHARED, getState, hasServerAccess, serverAuthenticationUrl, probe, setMode, setServer, setPendingServer } from "../config.js";
   import { countLinks } from "../local.js";
   import { applyDisplay, onDisplayChange, readDisplay, saveDisplay, type Density, type Theme } from "./display";
 
@@ -21,6 +21,25 @@
   let current = $state<State | null>(null); // as last shown, so clicks can respond without waiting
   let mode = $state(LOCAL);
   let wantsShared = false;
+  let choiceRevision = 0;
+  let choiceQueue = Promise.resolve();
+  function writeChoice<T>(write: () => Promise<T>): Promise<T> {
+    const result = choiceQueue.then(write);
+    choiceQueue = result.then(() => {}, () => {});
+    return result;
+  }
+
+  async function activatePending(srv: State["pendingServer"]) {
+    if (!srv || !wantsShared) return;
+    const choice = choiceRevision;
+    if (!(await hasServerAccess(srv)) || !(await probe(srv)).email) return;
+    await writeChoice(async () => {
+      const latest = await getState();
+      if (latest.managed || latest.pendingServer?.url !== srv.url || !wantsShared || choice !== choiceRevision) return;
+      // One write promotes both server and mode. A later Local choice is queued after it.
+      await setServer(srv.url);
+    });
+  }
   let count = $state(0);
   let status = $state<ServerStatus | null>(null);
   let serverUrl = $state("");
@@ -55,27 +74,46 @@
     if (seq !== renderSeq) return; // a newer render finished first
     // Show what is saved straight away; asking the server how it is can take a while.
     if (current?.server?.url !== state.server?.url) status = null;
+    if (!current) wantsShared = state.mode === SHARED;
     current = state;
     mode = state.mode;
     count = n;
-    serverUrl = state.server?.url ?? "";
-    const s = state.server ? await sharedStatus(state.server) : null;
+    const configured = state.pendingServer ?? state.server;
+    serverUrl = configured?.url ?? "";
+    const s = configured ? await sharedStatus(configured) : null;
     if (seq === renderSeq) status = s;
   }
 
-  function chooseShared() {
+  function chooseLocal() {
+    wantsShared = false;
+    choiceRevision++;
+    void writeChoice(() => setMode(LOCAL)).then(render).catch((err) => say(err.message, true));
+  }
+
+  async function chooseShared() {
     wantsShared = true;
-    if (current?.server) return void setMode(SHARED).then(render);
-    // Nothing to switch to yet: keep local mode until a server is saved.
-    mode = LOCAL;
-    say("Enter your company's Cairn server address. It saves automatically; choose Authenticate to sign in.");
+    choiceRevision++;
+    try {
+      const state = await getState();
+      if (state.pendingServer) await activatePending(state.pendingServer);
+      else if (state.server) await writeChoice(() => wantsShared ? setMode(SHARED) : Promise.resolve());
+      else say("Enter your company's Cairn server address. It saves automatically; choose Authenticate to sign in.");
+    } catch (err) { say((err as Error).message, true); }
+    await render();
   }
 
   async function saveServer(url: string) {
     if (current?.managed) return;
-    await setServer(url, false);
-    if (wantsShared) await setMode(SHARED);
-    void render();
+    try {
+      await setPendingServer(url);
+      await activatePending({ kind: "server", url, label: new URL(url).host });
+    } finally { void render(); }
+  }
+
+  async function returnFromAuthentication() {
+    try { await activatePending((await getState()).pendingServer); }
+    catch (err) { say((err as Error).message, true); }
+    await render();
   }
 
   // Theme and density take effect at once, on every extension page.
@@ -86,7 +124,7 @@
     const listener = () => render();
     chrome.storage.onChanged.addListener(listener);
     // Coming back from the sign-in tab: show the new state.
-    window.addEventListener("focus", listener);
+    window.addEventListener("focus", returnFromAuthentication);
     const stopDisplay = onDisplayChange((d) => {
       display = d;
       applyDisplay(d);
@@ -94,7 +132,7 @@
     render();
     return () => {
       chrome.storage.onChanged.removeListener(listener);
-      window.removeEventListener("focus", listener);
+      window.removeEventListener("focus", returnFromAuthentication);
       stopDisplay();
     };
   });
@@ -110,7 +148,7 @@
   <fieldset>
     <legend>Use links from</legend>
     {#if !current?.managed}
-      <ModeOption name="mode" value={LOCAL} bind:group={mode} title="This browser" onselect={() => { wantsShared = false; void setMode(LOCAL).then(render); }}>
+      <ModeOption name="mode" value={LOCAL} bind:group={mode} title="This browser" onselect={() => { if (wantsShared) chooseLocal(); }} onactivate={chooseLocal}>
         {#snippet body()}Stored only in this Chrome profile, not shared or synced · {count} link{count === 1 ? "" : "s"}{/snippet}
         {#snippet extra()}
           <Button onclick={() => chrome.tabs.create({ url: chrome.runtime.getURL("links.html") })}>Manage links</Button>
@@ -123,10 +161,13 @@
     >
       {#snippet body()}
         <span>Everyone at your company sees the same links. You sign in with your company account through Cloudflare Access.</span>
+        {#if current?.pendingServer}
+          <span>New address saved. Authenticate to use it.{current.mode === SHARED && current.server ? ` Links still use ${current.server.label}.` : ""}</span>
+        {/if}
         {#if status}<span class:error={status.warn}>{status.text}</span>{/if}
       {/snippet}
       {#snippet extra()}
-        <ServerSetup bind:serverUrl {saveServer} onedit={() => { wantsShared = true; }} authenticate={authenticateServer} onauthmessage={say} disabled={current?.managed} />
+        <ServerSetup bind:serverUrl {saveServer} onedit={() => { wantsShared = true; choiceRevision++; }} authenticate={authenticateServer} onauthmessage={say} disabled={current?.managed} />
       {/snippet}
     </ModeOption>
     <Status {message} />

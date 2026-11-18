@@ -1,6 +1,7 @@
 // Where links live, and talking to the Cairn server.
 //
 //   storage.sync    mode:      "local" | "shared"
+//                   pendingServerUrl: autosaved address awaiting permission and sign-in
 //                   serverUrl: the company's Cairn server, used in shared mode
 //   storage.managed serverUrl  set by policy; forces shared mode with that server
 //
@@ -36,14 +37,14 @@ async function managedServerUrl() {
 /** @typedef {LocalBackend | ServerBackend} Backend */
 
 /**
- * @returns {Promise<{ mode: string, server: ServerBackend|null, active: Backend, choices: Backend[], managed: boolean }>}
+ * @returns {Promise<{ mode: string, server: ServerBackend|null, pendingServer: ServerBackend|null, active: Backend, choices: Backend[], managed: boolean }>}
  * `choices` is what the popup can switch between: this browser, plus the server once one is set.
  */
 export async function getState() {
-  const [managedUrl, sync] = await Promise.all([managedServerUrl(), chrome.storage.sync.get(["mode", "serverUrl"])]);
+  const [managedUrl, sync] = await Promise.all([managedServerUrl(), chrome.storage.sync.get(["mode", "serverUrl", "pendingServerUrl"])]);
   if (managedUrl) {
     const pinned = server(managedUrl);
-    return { mode: SHARED, server: pinned, active: pinned, choices: [pinned], managed: true };
+    return { mode: SHARED, server: pinned, pendingServer: null, active: pinned, choices: [pinned], managed: true };
   }
   let srv = null;
   try {
@@ -51,15 +52,23 @@ export async function getState() {
   } catch {
     /* ignore a bad stored value */
   }
+  let pendingServer = null;
+  try { pendingServer = sync.pendingServerUrl ? server(normalizeServerUrl(sync.pendingServerUrl)) : null; }
+  catch { /* ignore an invalid pending address */ }
   const mode = sync.mode === SHARED && srv ? SHARED : LOCAL;
-  return { mode, server: srv, active: mode === SHARED ? srv : LOCAL_BACKEND, choices: srv ? [LOCAL_BACKEND, srv] : [LOCAL_BACKEND], managed: false };
+  return { mode, server: srv, pendingServer, active: mode === SHARED ? srv : LOCAL_BACKEND, choices: srv ? [LOCAL_BACKEND, srv] : [LOCAL_BACKEND], managed: false };
 }
 
 export const backendId = (b) => (b.kind === "local" ? LOCAL : SHARED);
 
-/** Save the shared server. Autosave can leave mode unchanged until the current choice is checked. */
+/** Commit a verified server and clear its pending address in the same storage write. */
 export function setServer(url, activate = true) {
-  return chrome.storage.sync.set(activate ? { serverUrl: url, mode: SHARED } : { serverUrl: url });
+  return chrome.storage.sync.set(activate ? { serverUrl: url, pendingServerUrl: null, mode: SHARED } : { serverUrl: url, pendingServerUrl: null });
+}
+
+/** Autosave a draft without changing the server used by links and suggestions. */
+export function setPendingServer(url) {
+  return chrome.storage.sync.set({ pendingServerUrl: url });
 }
 
 export function setMode(mode) {

@@ -41,9 +41,9 @@
   </ModeOption>
 </fieldset>
 
-{#if group === "shared"}
+<div hidden={group !== "shared"}>
   <ServerSetup bind:serverUrl {saveServer} {authenticate} onsaved={saved} />
-{/if}
+</div>
 
 <style>
   fieldset { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: var(--space-3); margin: 0; padding: 0; border: 0; min-width: 0; }

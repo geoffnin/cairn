@@ -14,8 +14,8 @@
   const aligned = async () => {
     const field = input.getBoundingClientRect();
     const action = button.getBoundingClientRect();
-    // On narrow screens the button wraps below the input; otherwise their centers align.
-    if (action.left >= field.right) await expect(Math.abs(field.top + field.height / 2 - action.top - action.height / 2)).toBeLessThan(1);
+    await expect(action.left).toBeGreaterThanOrEqual(field.right);
+    await expect(Math.abs(field.top + field.height / 2 - action.top - action.height / 2)).toBeLessThan(1);
   };
   await aligned();
   await userEvent.type(input, "go.example.com");
@@ -27,7 +27,17 @@
   await expect(input).toHaveAttribute("aria-invalid", "true");
   await expect(canvas.queryByText("Server address saved.")).not.toBeInTheDocument();
   await aligned();
-}} />
+}}>
+  {#snippet template(args)}<div style="width: 640px"><ServerSetup {...args} /></div>{/snippet}
+</Story>
+<Story name="Narrow input action" play={async ({ canvas }) => {
+  const field = canvas.getByLabelText("Server URL").getBoundingClientRect();
+  const action = canvas.getByRole("button", { name: "Authenticate" }).getBoundingClientRect();
+  await expect(action.top).toBeGreaterThanOrEqual(field.bottom);
+  await expect(Math.abs(action.left - field.left)).toBeLessThan(1);
+}}>
+  {#snippet template(args)}<div style="width: 280px"><ServerSetup {...args} /></div>{/snippet}
+</Story>
 <Story name="Save failure" args={{ saveServer: fn(async () => { throw new Error("Could not save the address. Try again."); }) }} play={async ({ args, canvas, userEvent }) => {
   await userEvent.type(canvas.getByLabelText("Server URL"), "go.example.com");
   await userEvent.tab();
