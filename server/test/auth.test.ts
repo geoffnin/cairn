@@ -93,6 +93,16 @@ describe("dev mode", () => {
     expect(await ok.json()).toMatchObject({ email: "me@local.test" });
     expect((await call("/_/api/me", { as: null, env: dev })).status).toBe(500);
   });
+
+  it("lets X-Cairn-Dev-User pick the person, under the same rules", async () => {
+    const dev = { AUTH_MODE: "dev", ADMIN_EMAILS: "boss@local.test", ALLOWED_EMAIL_DOMAINS: "local.test" };
+    const as = (user: string, origin = "http://localhost:8787") =>
+      call("/_/api/me", { as: null, env: dev, origin, headers: { "x-cairn-dev-user": user } });
+    expect(await (await as("Boss@Local.test")).json()).toMatchObject({ email: "boss@local.test", isAdmin: true });
+    expect((await as("someone@elsewhere.test")).status).toBe(403);
+    expect((await as("not an email")).status).toBe(400);
+    expect((await as("boss@local.test", "https://go.example.com")).status).toBe(500);
+  });
 });
 
 describe("access turned on for the Worker (ctx.access)", () => {

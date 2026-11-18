@@ -271,7 +271,26 @@ npm run typecheck
 ```
 
 Cloudflare Access does not run locally, so `dev` mode signs you in as a fixed user, and only on
-localhost. Point the extension at `http://localhost:8787` to test the two together.
+localhost. A request can pick someone else with an `X-Cairn-Dev-User: name@example.com` header.
+Point the extension at `http://localhost:8787` to test the two together.
+
+### End-to-end tests
+
+```sh
+npm run e2e                      # at the root, after `npm ci` here and in server/
+```
+
+Playwright drives the web UI and the extension in Chromium against the real Worker, run by
+`wrangler dev` in the same runtime as production, with a local D1 and KV that start empty on
+every run (`e2e/server.mjs`, port 8789). Each test signs in as its own person with the
+`X-Cairn-Dev-User` header, and `admin@e2e.test` is an admin. Links point at a stub site on port 8790
+(`e2e/destination.mjs`), so redirects are followed all the way. On a failure, open the trace with
+`npx playwright show-trace test-results/<test>/trace.zip`.
+
+What runs locally is everything except Cloudflare itself: Access sign-in, which the Worker's own
+tests cover with signed tokens (`server/test/auth.test.ts`), and caches that span locations.
+Keep logic and edge cases in those Worker tests; the end-to-end tests cover a handful of
+journeys that cross the UI, the API, the redirect and the extension.
 
 For live reload on the web UI, run `npm run dev -w web` at the root alongside the server's
 `npm run dev`: Vite serves the page on http://localhost:5173/_/ and passes API calls to the

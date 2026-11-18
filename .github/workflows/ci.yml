@@ -69,3 +69,27 @@ jobs:
         working-directory: server
       - run: npm test
         working-directory: server
+  # The web UI and the extension in Chromium against the Worker under `wrangler dev`
+  # (playwright.config.ts). Local D1 and KV, AUTH_MODE=dev in place of Cloudflare Access.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+      - run: npm ci
+      - run: npm ci
+        working-directory: server
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7

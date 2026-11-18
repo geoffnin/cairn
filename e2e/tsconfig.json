@@ -1,0 +1,16 @@
+{
+  // The end-to-end tests and their config run in Node (Playwright); `npm run check` type-checks them.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM"],
+    "types": ["node", "chrome"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "allowJs": true,
+    "checkJs": true
+  },
+  "include": [".", "../playwright.config.ts"]
+}
