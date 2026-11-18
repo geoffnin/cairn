@@ -1,11 +1,11 @@
-<!-- Who is signed in, and the way out: "dev@example.com · Sign out". -->
+<!-- Who is signed in: "dev@example.com". The identity provider signs people in, so there is no
+     way out here: the account is the company one. -->
 <script lang="ts">
-  let { email, signOutHref }: { email: string; signOutHref?: string } = $props();
+  let { email }: { email: string } = $props();
 </script>
 
-<span class="account">{email}{#if signOutHref}{" · "}<a href={signOutHref}>Sign out</a>{/if}</span>
+<span class="account">{email}</span>
 
 <style>
   .account { font: var(--type-small); color: var(--ink-muted); }
-  a { color: inherit; }
 </style>

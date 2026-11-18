@@ -20,7 +20,6 @@
     fresh?: string | null;
     now?: Date;
     href: (link: DirectoryLink) => string;
-    signOutHref?: string;
     oninput?: () => void;
     onfilter?: (filter: Filter) => void;
     onsort?: (sort: Sort) => void;
@@ -31,7 +30,7 @@
   };
   let {
     host, me, links, counts, q = $bindable(""), filter = $bindable("all"), sort = $bindable("used"), selected = $bindable(-1),
-    fresh = null, now, href, signOutHref = "#signout", oninput, onfilter, onsort, onnew, onopen, oncopy, onedit,
+    fresh = null, now, href, oninput, onfilter, onsort, onnew, onopen, oncopy, onedit,
   }: Props = $props();
   const total = $derived(filter === "mine" ? counts.mine : filter === "new" ? counts.new : counts.all);
 </script>
@@ -39,7 +38,7 @@
 <Page>
   <Header>
     {#snippet hint()}<code>{host}</code>{/snippet}
-    {#snippet end()}<Account email={me} {signOutHref} />{/snippet}
+    {#snippet end()}<Account email={me} />{/snippet}
   </Header>
   <DirectoryToolbar bind:q bind:filter bind:sort {counts} {oninput} {onfilter} {onsort} {onnew} />
   <DirectoryTable {links} {total} {href} {me} {now} {fresh} bind:selected query={q.trim()} {onopen} {oncopy} {onedit} />

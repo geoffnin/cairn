@@ -28,5 +28,8 @@
   }
   button:hover { background: var(--surface-sunken); }
   button[aria-pressed="true"] { background: var(--moss-soft); border-color: var(--moss); }
+  /* The ring lies on the option's edge: outside it, it would draw a second border around the
+     chosen one's moss border and run into the track's. */
+  button:focus-visible { outline-offset: -1px; }
   .count { font-weight: 400; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 </style>

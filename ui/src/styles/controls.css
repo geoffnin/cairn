@@ -14,10 +14,12 @@
   }
   .cn-control::placeholder { color: var(--ink-faint); }
   .cn-control:hover:not(:disabled) { border-color: var(--ink-muted); }
+  /* Text controls take focus from a click too, so the ring lies on the border rather than
+     outside it: one 2px edge, not a border inside a ring. */
+  .cn-control:focus-visible { outline-offset: -1px; }
   .cn-control:disabled { opacity: .5; }
   .cn-control[aria-invalid="true"] { border-color: var(--clay); }
   .cn-control.is-mono { font-family: var(--font-mono); font-size: 13px; }
-  select.cn-control { padding-right: var(--space-2); }
 
   /* Read by screen readers, not shown. */
   .cn-visually-hidden {
