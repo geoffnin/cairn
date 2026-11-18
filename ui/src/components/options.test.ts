@@ -205,12 +205,19 @@ it.each(["http://invalid.example.com", "other.example.com", "new.example.com/pat
     stored.pendingServerUrl = "https://new.example.com";
     const input = await show();
     await fireEvent.input(input, { target: { value: draft } });
+    const invalid = draft === "http://invalid.example.com";
+    if (invalid) {
+      await fireEvent.blur(input);
+      expect(input.getAttribute("aria-invalid")).toBe("true");
+      expect(stored.pendingServerUrl).toBe("https://new.example.com");
+    }
     vi.mocked(probe).mockResolvedValue({ email: "test@example.com" });
     await focusListener();
     const matches = draft === "new.example.com/path";
     expect(stored.serverUrl).toBe(matches ? "https://new.example.com" : "https://go.example.com");
     expect(stored.pendingServerUrl).toBe(matches ? null : "https://new.example.com");
     if (!matches) expect(input.value).toBe(draft);
+    if (invalid) expect(input.getAttribute("aria-invalid")).toBe("true");
   },
 );
 
