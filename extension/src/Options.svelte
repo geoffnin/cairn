@@ -10,7 +10,7 @@
   import ServerSetup from "@cairn/ui/components/ServerSetup.svelte";
   import type { Message } from "@cairn/ui/lib/links";
   import { onMount } from "svelte";
-  import { LOCAL, SHARED, getState, hasServerAccess, serverAuthenticationUrl, probe, setMode, setServer, setPendingServer } from "../config.js";
+  import { LOCAL, SHARED, getState, hasServerAccess, normalizeServerUrl, serverAuthenticationUrl, probe, setMode, setServer, setPendingServer } from "../config.js";
   import { countLinks } from "../local.js";
   import { applyDisplay, onDisplayChange, readDisplay, saveDisplay, type Density, type Theme } from "./display";
 
@@ -45,11 +45,27 @@
   let serverUrl = $state("");
   let message = $state<Message | null>(null);
   const say = (text: string, error = false) => (message = { text, error });
+  let authenticationOrigin: string | null = null;
+  const sayAuthentication = (text: string, error = false) =>
+    say(error ? text : `${text} This page updates when you come back.`, error);
+
+  function editServer(address: string) {
+    wantsShared = true;
+    choiceRevision++;
+    let origin: string;
+    try { origin = normalizeServerUrl(address); }
+    catch { return; } // Validation feedback belongs to the field.
+    if (authenticationOrigin && authenticationOrigin !== origin) {
+      authenticationOrigin = null;
+      message = null;
+    }
+  }
 
   // Must run straight from a click: Chrome only shows the permission prompt for a user gesture.
   const requestAccess = (url: string) => chrome.permissions.request({ origins: [`${url}/*`] }).catch(() => false);
 
   async function authenticateServer(url: string) {
+    authenticationOrigin = url;
     if (!(await requestAccess(url))) throw new Error(`Cairn needs permission to reach ${new URL(url).host} to use it.`);
     await chrome.tabs.create({ url: serverAuthenticationUrl(url) });
   }
@@ -59,7 +75,7 @@
     const p = await probe(srv);
     if (p.email) {
       // Back from the sign-in tab: replace the "sign in" prompt with the outcome.
-      if (message?.text.startsWith(`Sign in to ${srv.label}`)) say(`Signed in to ${srv.label} as ${p.email}.`);
+      if (authenticationOrigin === srv.url && message?.text.startsWith(`Sign in to ${srv.label}`)) say(`Signed in to ${srv.label} as ${p.email}.`);
       return { text: `Signed in as ${p.email}.` };
     }
     if (p.signedOut) return { text: "Not signed in (or the server is not reachable).", warn: true };
@@ -167,7 +183,7 @@
         {#if status}<span class:error={status.warn}>{status.text}</span>{/if}
       {/snippet}
       {#snippet extra()}
-        <ServerSetup bind:serverUrl {saveServer} onedit={() => { wantsShared = true; choiceRevision++; }} authenticate={authenticateServer} onauthmessage={say} disabled={current?.managed} />
+        <ServerSetup bind:serverUrl {saveServer} onedit={editServer} authenticate={authenticateServer} onauthmessage={sayAuthentication} disabled={current?.managed} />
       {/snippet}
     </ModeOption>
     <Status {message} />

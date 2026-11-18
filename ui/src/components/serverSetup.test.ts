@@ -44,7 +44,8 @@ describe("server address persistence and authentication", () => {
       expect(open).toHaveBeenCalledWith("http://localhost:1234/_/auth/complete/", "_blank", "noopener,noreferrer");
       expect(saveServer).toHaveBeenCalledTimes(1);
       pending.resolve();
-      await waitFor(() => expect(screen.getByText("Sign in to localhost:1234 in the tab that just opened. This page updates when you come back.")).toBeTruthy());
+      expect(screen.queryByText(/This page updates when you come back/)).toBeNull();
+      await waitFor(() => expect(screen.getByText("Sign in to localhost:1234 in the tab that just opened.")).toBeTruthy());
     } finally { open.mockRestore(); }
   });
 
@@ -71,7 +72,7 @@ describe("server address persistence and authentication", () => {
     await fireEvent.input(screen.getByLabelText("Server URL"), { target: { value: "go.example.com" } });
     await fireEvent.submit(screen.getByRole("form"));
     await waitFor(() => expect(onauthmessage).toHaveBeenCalledWith(
-      "Sign in to go.example.com in the tab that just opened. This page updates when you come back.", false,
+      "Sign in to go.example.com in the tab that just opened.", false,
     ));
     await waitFor(() => expect(screen.getByText("Could not save the address")).toBeTruthy());
     expect(screen.queryByText(/Sign in to/)).toBeNull();

@@ -149,3 +149,27 @@ it("ignores a ready probe if Local was chosen while it was in flight", async () 
   expect(stored.mode).toBe("local");
   expect(stored.serverUrl).toBe("https://go.example.com");
 });
+
+it("clears sign-in feedback when an edit changes the server origin", async () => {
+  const input = await show();
+  await fireEvent.submit(screen.getByRole("form"));
+  const pending = "Sign in to go.example.com in the tab that just opened. This page updates when you come back.";
+  await screen.findByText(pending);
+  await edit(input, "b.example.com");
+  await screen.findByText("Server address saved.");
+  expect(screen.queryByText(pending)).toBeNull();
+  expect(stored.pendingServerUrl).toBe("https://b.example.com");
+});
+
+it("keeps same-origin sign-in feedback so the return probe can replace it", async () => {
+  const input = await show();
+  await fireEvent.submit(screen.getByRole("form"));
+  const pending = "Sign in to go.example.com in the tab that just opened. This page updates when you come back.";
+  await screen.findByText(pending);
+  await edit(input, "https://go.example.com/some/path");
+  expect(screen.getByText(pending)).toBeTruthy();
+  vi.mocked(probe).mockResolvedValue({ email: "test@example.com" });
+  await fireEvent(window, new Event("focus"));
+  await screen.findByText("Signed in to go.example.com as test@example.com.");
+  expect(screen.queryByText(pending)).toBeNull();
+});

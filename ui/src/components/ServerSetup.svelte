@@ -12,7 +12,7 @@
     authenticate?: (url: string) => void | Promise<void>;
     disabled?: boolean;
     onsaved?: (url: string) => void;
-    onedit?: () => void;
+    onedit?: (address: string) => void;
     /** Lets the host replace sign-in feedback after probing the server on return. */
     onauthmessage?: (text: string, error?: boolean) => void;
   };
@@ -101,7 +101,7 @@
     try {
       // Invoke before awaiting persistence: opening a tab/asking Chrome permission needs this gesture.
       await authenticate(url);
-      sayAuth(`Sign in to ${new URL(url).host} in the tab that just opened. This page updates when you come back.`);
+      sayAuth(`Sign in to ${new URL(url).host} in the tab that just opened.`);
     } catch (err) {
       sayAuth((err as Error).message, true);
     } finally {
@@ -113,7 +113,7 @@
 
 <form onsubmit={submit} aria-label="Configure your company’s server">
   <TextField label="Server URL" mono bind:value={address} bind:input {error} disabled={disabled || authenticating}
-    onblur={saveAddress} oninput={() => { editRevision++; error = ""; message = null; onedit?.(); }}
+    onblur={saveAddress} oninput={() => { editRevision++; error = ""; message = null; onedit?.(address); }}
     placeholder="go.example.com or localhost:8787" spellcheck={false} autocomplete="url"
     hint={disabled ? "Your organization set this address. Authenticate opens sign-in in a new tab." : "The address saves automatically when you leave this field. Authenticate opens your server’s sign-in page in a new tab."}>
     {#snippet controlAction()}
