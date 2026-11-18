@@ -51,3 +51,18 @@ describe("web UI", () => {
     expect((await call("/_/assets/nope.js")).status).toBe(404);
   });
 });
+
+describe("authentication landing page", () => {
+  const path = "/_/auth/complete/";
+  it("serves a script-free confirmation only after authentication", async () => {
+    const response = await call(path);
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain("You’re signed in to Cairn");
+    expect(html).not.toContain("<script");
+    expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+    expect(response.headers.get("cache-control")).toBe("private, no-cache");
+    expect((await call(path, { as: null })).status).toBe(401);
+    expect((await call(path, { method: "POST" })).status).toBe(405);
+  });
+});

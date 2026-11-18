@@ -8,8 +8,8 @@
 // Cloudflare Access. The extension holds no credentials: the browser's Access session signs in
 // redirects and API calls.
 
-import { normalizeServerUrl } from "../ui/src/lib/server.js";
-export { normalizeServerUrl };
+import { normalizeServerUrl, serverAuthenticationUrl } from "../ui/src/lib/server.js";
+export { normalizeServerUrl, serverAuthenticationUrl };
 
 export const LOCAL = "local";
 export const SHARED = "shared";
@@ -57,9 +57,9 @@ export async function getState() {
 
 export const backendId = (b) => (b.kind === "local" ? LOCAL : SHARED);
 
-/** Use this server for shared mode, and switch to it. */
-export function setServer(url) {
-  return chrome.storage.sync.set({ serverUrl: url, mode: SHARED });
+/** Save the shared server. Autosave can leave mode unchanged until the current choice is checked. */
+export function setServer(url, activate = true) {
+  return chrome.storage.sync.set(activate ? { serverUrl: url, mode: SHARED } : { serverUrl: url });
 }
 
 export function setMode(mode) {

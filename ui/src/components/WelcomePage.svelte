@@ -16,14 +16,15 @@
   type Props = {
     mode?: "local" | "shared";
     serverUrl?: string;
-    connect: (url: string) => Promise<void>;
+    saveServer: (url: string) => Promise<void>;
+    authenticate?: (url: string) => void | Promise<void>;
     create: (link: NewLink) => Promise<Link>;
     onmodechange?: (mode: "local" | "shared") => void;
     onimport?: () => void;
     settingsHref?: string;
     linksHref?: string;
   };
-  let { mode = $bindable("local"), serverUrl = $bindable(""), connect, create, onmodechange, onimport, settingsHref = "#settings", linksHref = "#links" }: Props = $props();
+  let { mode = $bindable("local"), serverUrl = $bindable(""), saveServer, authenticate, create, onmodechange, onimport, settingsHref = "#settings", linksHref = "#links" }: Props = $props();
   let pending = $state(mode === "shared" && !serverUrl);
   let made = $state<Link | null>(null);
   let skipped = $state(false);
@@ -46,13 +47,13 @@
 
   <Step n={1} title="Where your links live" state={pending ? "current" : "done"}>
     {#snippet aside()}Change any time in Settings{/snippet}
-    <WhereLinksLive bind:mode bind:serverUrl bind:pending {connect} onchange={onmodechange} />
+    <WhereLinksLive bind:mode bind:serverUrl bind:pending {saveServer} {authenticate} onchange={onmodechange} />
   </Step>
 
   <Step n={2} title="Make your first link" state={pending ? "todo" : firstDone ? "done" : "current"}>
     {#snippet aside()}{#if !firstDone && !pending}<LinkButton muted onclick={() => (skipped = true)}>Skip for now</LinkButton>{/if}{/snippet}
     {#if pending}
-      <p class="cn-hint">Connect your server above before making a shared link, or choose This browser to continue locally.</p>
+      <p class="cn-hint">Enter your server address above before making a shared link, or choose This browser to continue locally.</p>
     {/if}
     <div hidden={pending}>
       <FirstLinkForm {create} {onimport} oncreated={(l) => (made = l)} />

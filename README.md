@@ -202,11 +202,13 @@ export yet, so links made in local mode stay in local mode.
 
 **Shared mode** uses your company's Cairn server instead, so everyone sees the same links:
 
-1. In settings, under **Shared**, enter the server URL and choose **Use this server**.
-2. Allow the permission Chrome asks for, so the extension can reach your server.
-3. If you are not signed in yet, a tab opens on the server and Cloudflare Access asks you to sign
-   in with your company account. After that, links, the toolbar popup and address-bar search
-   all use that sign-in until the Access session expires.
+1. In settings, under **Shared**, enter the server address. It saves automatically when you
+   leave the field. Bare addresses use HTTPS; `localhost:8787` (and loopback IP addresses)
+   use HTTP for local development. Pasted paths are removed because Cairn uses the server origin.
+2. Choose **Authenticate** and allow Chrome's permission to reach your server.
+3. A new tab opens at `/_/auth/complete/`, behind Cloudflare Access. Sign in with your company
+   account if needed, then close the confirmation tab and return to the extension. Links,
+   the toolbar popup and address-bar search use that sign-in until the Access session expires.
 
 There is one server at a time. Switch between this browser and shared in settings or in the
 toolbar popup; the other side's links are kept, just not used.
