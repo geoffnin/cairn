@@ -5,6 +5,7 @@
     /* Colour: light, dark */
     --page: light-dark(#faf5ec, #151714);
     --surface: light-dark(#fffcf6, #1c1e1a);
+    --field: light-dark(#ffffff, #272a24);
     --surface-sunken: light-dark(#f1ebdf, #252822);
     --line: light-dark(#e6ddce, #31342d);
     --line-control: light-dark(#8d8473, #767a6c);
