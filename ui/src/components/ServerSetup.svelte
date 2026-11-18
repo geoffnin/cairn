@@ -13,13 +13,20 @@
     disabled?: boolean;
     onsaved?: (url: string) => void;
     onedit?: () => void;
+    /** Lets the host replace sign-in feedback after probing the server on return. */
+    onauthmessage?: (text: string, error?: boolean) => void;
   };
   let { serverUrl = $bindable(""), saveServer, authenticate = (url) => {
     window.open(serverAuthenticationUrl(url), "_blank", "noopener,noreferrer");
-  }, disabled = false, onsaved, onedit }: Props = $props();
+  }, disabled = false, onsaved, onedit, onauthmessage }: Props = $props();
   let address = $state(serverUrl);
   let error = $state("");
   let message = $state<Message | null>(null);
+  let authMessage = $state<Message | null>(null);
+  const sayAuth = (text: string, error = false) => {
+    if (onauthmessage) onauthmessage(text, error);
+    else authMessage = { text, error };
+  };
   let authenticating = $state(false);
   let input: HTMLInputElement | undefined = $state();
   let revision = 0;
@@ -81,11 +88,13 @@
     try {
       // Invoke before awaiting persistence: opening a tab/asking Chrome permission needs this gesture.
       await authenticate(url);
-      if (await saved) message = { text: "Finish signing in in the new tab, then return here." };
+      sayAuth(`Sign in to ${new URL(url).host} in the tab that just opened. This page updates when you come back.`);
     } catch (err) {
+      sayAuth((err as Error).message, true);
+    } finally {
       await saved;
-      message = { text: (err as Error).message, error: true };
-    } finally { authenticating = false; }
+      authenticating = false;
+    }
   }
 </script>
 
@@ -99,6 +108,7 @@
     {/snippet}
   </TextField>
   <Status {message} />
+  {#if !onauthmessage}<Status message={authMessage} />{/if}
 </form>
 
 <style>

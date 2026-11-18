@@ -33,7 +33,6 @@
   async function authenticateServer(url: string) {
     if (!(await requestAccess(url))) throw new Error(`Cairn needs permission to reach ${new URL(url).host} to use it.`);
     await chrome.tabs.create({ url: serverAuthenticationUrl(url) });
-    say(`Sign in to ${new URL(url).host} in the tab that just opened. This page updates when you come back.`);
   }
 
   async function sharedStatus(srv: Server): Promise<ServerStatus> {
@@ -127,7 +126,7 @@
         {#if status}<span class:error={status.warn}>{status.text}</span>{/if}
       {/snippet}
       {#snippet extra()}
-        <ServerSetup bind:serverUrl {saveServer} onedit={() => { wantsShared = true; }} authenticate={authenticateServer} disabled={current?.managed} />
+        <ServerSetup bind:serverUrl {saveServer} onedit={() => { wantsShared = true; }} authenticate={authenticateServer} onauthmessage={say} disabled={current?.managed} />
       {/snippet}
     </ModeOption>
     <Status {message} />

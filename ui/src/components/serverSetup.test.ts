@@ -43,7 +43,7 @@ describe("server address persistence and authentication", () => {
       expect(open).toHaveBeenCalledWith("http://localhost:1234/_/auth/complete/", "_blank", "noopener,noreferrer");
       expect(saveServer).toHaveBeenCalledTimes(1);
       pending.resolve();
-      await waitFor(() => expect(screen.getByText("Finish signing in in the new tab, then return here.")).toBeTruthy());
+      await waitFor(() => expect(screen.getByText("Sign in to localhost:1234 in the tab that just opened. This page updates when you come back.")).toBeTruthy());
     } finally { open.mockRestore(); }
   });
 
@@ -57,6 +57,38 @@ describe("server address persistence and authentication", () => {
     await fireEvent.submit(screen.getByRole("form"));
     pending.resolve();
     await waitFor(() => expect(screen.getByText("Permission denied")).toBeTruthy());
-    expect(screen.queryByText("Server address saved.")).toBeNull();
+    expect(screen.getByText("Server address saved.")).toBeTruthy();
   });
+
+  it("delegates authentication feedback while keeping save errors local", async () => {
+    const onauthmessage = vi.fn();
+    render(ServerSetup, {
+      saveServer: async () => { throw new Error("Could not save the address"); },
+      authenticate: async () => {},
+      onauthmessage,
+    });
+    await fireEvent.input(screen.getByLabelText("Server URL"), { target: { value: "go.example.com" } });
+    await fireEvent.submit(screen.getByRole("form"));
+    await waitFor(() => expect(onauthmessage).toHaveBeenCalledWith(
+      "Sign in to go.example.com in the tab that just opened. This page updates when you come back.", false,
+    ));
+    await waitFor(() => expect(screen.getByText("Could not save the address")).toBeTruthy());
+    expect(screen.queryByText(/Sign in to/)).toBeNull();
+    expect(onauthmessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("delegates authentication failures without replacing save errors", async () => {
+    const onauthmessage = vi.fn();
+    render(ServerSetup, {
+      saveServer: async () => { throw new Error("Could not save the address"); },
+      authenticate: async () => { throw new Error("Permission denied"); },
+      onauthmessage,
+    });
+    await fireEvent.input(screen.getByLabelText("Server URL"), { target: { value: "go.example.com" } });
+    await fireEvent.submit(screen.getByRole("form"));
+    await waitFor(() => expect(onauthmessage).toHaveBeenCalledWith("Permission denied", true));
+    await waitFor(() => expect(screen.getByText("Could not save the address")).toBeTruthy());
+    expect(screen.queryByText("Permission denied")).toBeNull();
+  });
+
 });
