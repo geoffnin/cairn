@@ -366,7 +366,7 @@ extension/src/              the popup, settings and manage pages; extension/publ
   wired to links in memory, so a journey can be clicked through.
 
 Each push to `main` that passes CI publishes Storybook to GitHub Pages, at
-https://geoffnin.github.io/cairn/.
+https://geoffnin.github.io/cairn/storybook/.
 
 The toolbar switches theme (light, dark) and density. Every story is also a test: `npm test`
 renders each one in Chromium, runs its play function (the interactions it describes, with their
@@ -384,6 +384,22 @@ Cloudflare button copies only `server/` and so cannot build the UI itself. After
 anything under `web/` or `ui/`, run `npm run build` and commit `server/public/_/` with your
 change; CI fails if it is out of date. The build is the same on every machine (Svelte's scoped
 class names come from the CSS, not the file path), so it only changes when the UI does.
+
+### Marketing site
+
+`site/` is the public website: a home page, `extension/` and `server/`, one page for each piece.
+It is a Svelte and Vite app like the others, built from the design system's tokens and
+components, so it changes when they do.
+
+```sh
+npm run dev -w site              # http://localhost:5173
+npm run build-site               # site/dist/, with Storybook built into site/dist/storybook/
+```
+
+Each push to `main` that passes CI publishes `site/dist/` to GitHub Pages, at
+https://geoffnin.github.io/cairn/. The pages link to each other with relative paths, so
+`site/dist/` can be served from any host or path as well, for example from Cloudflare Pages
+with a custom domain.
 
 ### API
 
