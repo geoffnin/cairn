@@ -114,6 +114,27 @@ describe("LinksPage", () => {
     expect(document.activeElement).toBe(form().getByLabelText("Name"));
   });
 
+  it("never calls a name free that could not be a link", async () => {
+    const source = memorySource();
+    const get = vi.spyOn(source, "get");
+    render(LinksPage, { source });
+    await fireEvent.input(form().getByLabelText("Name"), { target: { value: "road map" } });
+    await fireEvent.input(form().getByLabelText("Name"), { target: { value: ".." } });
+    await new Promise((r) => setTimeout(r, 300));
+    expect(get).not.toHaveBeenCalled();
+    expect(form().queryByText(/is free/)).toBeNull();
+  });
+
+  it("calls a name free again once its link is deleted", async () => {
+    render(LinksPage, { source: memorySource([wiki]) });
+    await fireEvent.input(form().getByLabelText("Name"), { target: { value: "wiki" } });
+    await waitFor(() => expect(form().getByText("go/wiki already exists.")).toBeTruthy());
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    await fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(form().getByText("go/wiki is free")).toBeTruthy());
+    expect(form().queryByText("go/wiki already exists.")).toBeNull();
+  });
+
   it("hands over a description from ?desc= with the rest of the draft", async () => {
     history.replaceState(null, "", "/_/?new=roadmap&url=https%3A%2F%2Fdocs.example.com&desc=The%20plan");
     render(LinksPage, { source: memorySource() });

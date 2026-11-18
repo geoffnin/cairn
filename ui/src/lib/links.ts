@@ -71,6 +71,9 @@ export interface Message {
   error?: boolean;
 }
 
+/** What a name may be, as the server and the extension's local store check it. */
+export const SLUG_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+
 /** What is known about a name while it is being typed. */
 export type NameCheck =
   | { state: "checking" }

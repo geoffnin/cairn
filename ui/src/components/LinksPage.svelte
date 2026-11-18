@@ -3,7 +3,7 @@
      specific to where links live comes from the LinkSource. -->
 <script lang="ts">
   import { onMount, untrack, type Snippet } from "svelte";
-  import type { Link, LinkSource, Message, NameCheck } from "../lib/links";
+  import { SLUG_RE, type Link, type LinkSource, type Message, type NameCheck } from "../lib/links";
   import Card from "./Card.svelte";
   import Checkbox from "./Checkbox.svelte";
   import EditDialog from "./EditDialog.svelte";
@@ -60,6 +60,7 @@
       await source.remove(link);
       listMessage = { text: `Deleted go/${link.slug}.` };
       load();
+      checkName(slug); // the name being typed may be the one just freed
     } catch (err) {
       listMessage = { text: (err as Error).message, error: true };
     }
@@ -76,7 +77,9 @@
   let urlInput: HTMLInputElement | undefined = $state();
 
   // Whether the name being typed is free, for the mark beside it. Each keystroke shows the spinner
-  // at once, so a stale "free" never stands; the lookup waits for a pause in typing.
+  // at once, so a stale "free" never stands; the lookup waits for a pause in typing. A name that
+  // could never be a link ("road map", "..") is not looked up, so it is never called free: the
+  // mark stays grey and Create says why.
   let check = $state<NameCheck | null>(null);
   let checkSeq = 0;
   let checkTimer: ReturnType<typeof setTimeout>;
@@ -84,7 +87,7 @@
     clearTimeout(checkTimer);
     const id = ++checkSeq;
     const name = raw.trim().toLowerCase();
-    if (!name) return void (check = null);
+    if (!SLUG_RE.test(name)) return void (check = null);
     check = { state: "checking" };
     checkTimer = setTimeout(async () => {
       try {
@@ -103,7 +106,10 @@
   onMount(() => {
     if (unknownName) urlInput?.focus();
     load();
-    return source.watch?.(load);
+    return source.watch?.(() => {
+      load();
+      checkName(slug); // a link made or deleted elsewhere can change whether the name is free
+    });
   });
 </script>
 
