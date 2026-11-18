@@ -2,18 +2,21 @@
   "name": "@cairn/extension",
   "private": true,
   "type": "module",
-  "description": "The Chrome extension. Builds to dist/, which is what Chrome loads.",
+  "description": "The browser extension. Builds to dist/chrome/ (Chrome and Edge) and dist/firefox/.",
   "scripts": {
-    "build": "vite build",
+    "build": "vite build && vite build --mode firefox",
     "dev": "vite build --watch --mode development",
+    "dev:firefox": "vite build --watch --mode firefox",
+    "lint": "web-ext lint --source-dir dist/firefox",
     "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "@cairn/ui": "*"
   },
   "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "svelte": "^5.57.3",
     "vite": "^8.3.8",
-    "@sveltejs/vite-plugin-svelte": "^7.3.1"
+    "web-ext": "^10.8.0"
   }
 }

@@ -218,8 +218,9 @@ attaches its handlers before awaiting configuration so an early click is not los
 **Date:** 2026-11-17 · **Status:** accepted
 
 **Decision.** Every non-GET API request must carry `X-Cairn-Request: 1`, and if an `Origin`
-header is present it must be the server's own origin or a `chrome-extension://` origin. The
-server never answers CORS preflights.
+header is present it must be the server's own origin or an extension's (`chrome-extension://`
+for Chrome and Edge, `moz-extension://` for Firefox, D31). The server never answers CORS
+preflights.
 
 **Why.** Sessions are cookies, so writes need CSRF protection. A custom header cannot be sent
 cross-origin without a preflight, and with no CORS headers the preflight fails, so a hostile
@@ -1059,7 +1060,7 @@ URLs, and theme and density controls on the server UI.
 
 **Decision.** The extension's pages and the server's web UI are Svelte 5 apps built by Vite into
 static files. Shared components live in an npm workspace package, `ui/`; the server's app is
-`web/`; the extension builds into `extension/dist/`. The Worker no longer contains UI code: Vite
+`web/`; the extension builds into `extension/dist/` (per browser since D31). The Worker no longer contains UI code: Vite
 writes the server UI into `server/public/_/`, Workers Static Assets uploads it with the Worker,
 and the Worker serves it from the `ASSETS` binding after signing the request in.
 
@@ -1114,7 +1115,7 @@ for a year (`private, immutable`). `index.html` is `private, no-cache`.
   checkout, and CI fails when the committed build differs from a fresh one. Both deploy paths
   were checked with `wrangler deploy --dry-run`: a full copy of the repository with nothing
   installed or built, and a copy of `server/` alone.
-- *The extension must be built before loading it unpacked:* load `extension/dist/`, not
+- *The extension must be built before loading it unpacked:* load `extension/dist/<browser>/` (D31), not
   `extension/`. Its non-UI modules (`background.js`, `config.js`, `local.js`, `golinks.js`)
   are unchanged and still tested with `node --test`.
 - *Development dependencies:* Svelte, Vite, svelte-check, Vitest, jsdom and Testing Library.
@@ -1124,6 +1125,51 @@ for a year (`private, immutable`). `index.html` is `private, no-cache`.
 **Not verified.** A real Deploy to Cloudflare install (that its copy of `server/` deploys the
 committed UI, and that the build image honours `.node-version`), and Static Assets on a live
 account. Both were run locally with `wrangler dev` and `wrangler deploy --dry-run`.
+
+---
+
+## D31. One extension source, built per browser; packages attached to each release
+
+**Date:** 2026-11-18 · **Status:** accepted · **Amends:** D8, D30
+
+**Decision.** The extension builds for two targets from the same source: `chrome`
+(`extension/dist/chrome/`, also what Edge runs) and `firefox` (`extension/dist/firefox/`).
+`extension/manifest.json` is the Chrome manifest; `vite.config.ts` writes each target's
+`manifest.json`, changing for Firefox only what Firefox needs: an event-page background
+(`background.scripts`) instead of a service worker, `browser_specific_settings.gecko` (ID
+`cairn@geoffnin.github.io`, Firefox 140 or later, no data collected), and no managed-storage
+schema. Code reaches the extension APIs through `ext` (`extension/ext.js`: `browser` where it
+exists, else `chrome`). Publishing a GitHub release runs `.github/workflows/release.yml`, which
+checks the tag against the manifest's version, builds, runs Firefox's validator (`web-ext lint`)
+and attaches `cairn-extension-<version>-chrome-edge.zip` and `…-firefox.zip` to the release.
+
+**Why.**
+
+- *Edge is Chromium.* It takes the Chrome package as is, Edge Add-ons included, so a third
+  target would be a copy.
+- *Firefox differs in a handful of places, all small.* Besides the manifest: the local-mode
+  redirect target came from `chrome-extension://${runtime.id}`, which is wrong in Firefox
+  (its pages are `moz-extension://<per-install UUID>`, and `runtime.id` is the add-on ID), so it
+  now comes from `runtime.getURL()`. Address-bar suggestions are plain text in Firefox, which
+  does not style Chrome's `<match>`/`<dim>` markup. The server's Origin check (D8) and its
+  `client.kind` attribute accept `moz-extension://`.
+- *Release packages, not store uploads.* Each store has its own review, listing and credentials.
+  Attaching the packages keeps submission a deliberate, manual step and keeps store secrets out
+  of the repository. Firefox Add-ons asks for source code because the extension is bundled; the
+  release's source archive is that.
+- *The manifest owns the version.* Stores read it from there, so the release job refuses a tag
+  that disagrees rather than rewriting it.
+
+**Deferred: Safari.** Safari needs the extension wrapped in a macOS app, built with Xcode and
+signed with an Apple developer account. `ext` and `runtime.getURL()` already suit it; it also
+lacks `omnibox` and `storage.managed`, which a Safari target would have to allow for
+(`config.js` already copes with a missing `storage.managed`).
+
+**Not verified.** The Chrome build was loaded in Chromium and the local-mode redirect checked
+(`go/hello/world` → the new-link page). The Firefox build passes `web-ext lint` (one warning:
+Svelte's runtime sets `innerHTML` from its compiled templates), but was not run in Firefox here:
+the redirect, popup, address-bar suggestions and shared mode (including Cloudflare Access cookies
+on the extension's API calls) need a manual check with `npx web-ext run -s extension/dist/firefox`.
 
 ---
 

@@ -186,7 +186,8 @@ describe("link lifecycle events", () => {
 
   it("marks changes made from the extension's popup", async () => {
     await call("/_/api/links", { method: "POST", body: { slug: "ext", url: "https://e.test/" }, headers: { origin: "chrome-extension://abcdef" } });
-    expect(named("cairn.link.create")[0]).toMatchObject({ "client.kind": "extension" });
+    await call("/_/api/links", { method: "POST", body: { slug: "fx", url: "https://e.test/" }, headers: { origin: "moz-extension://0b1c2d3e" } });
+    expect(named("cairn.link.create")).toMatchObject([{ "client.kind": "extension" }, { "client.kind": "extension" }]);
   });
 });
 

@@ -12,7 +12,7 @@ import {
   validateUrl,
 } from "./links";
 import type { Env, Link, User } from "./types";
-import { linkCreated, linkDeleted, linkUpdated, logEvent, metricsUrl } from "./events";
+import { isExtensionOrigin, linkCreated, linkDeleted, linkUpdated, logEvent, metricsUrl } from "./events";
 import { inSpan } from "./tracing";
 import { userIdFor } from "./users";
 import { json } from "./util";
@@ -32,7 +32,7 @@ const present = (env: Env, user: User, link: Link) => ({
 function checkCsrf(req: Request): Response | null {
   if (req.headers.get("x-cairn-request") !== "1") return json({ error: "Missing X-Cairn-Request header." }, 403);
   const origin = req.headers.get("origin");
-  if (origin && origin !== new URL(req.url).origin && !origin.startsWith("chrome-extension://")) {
+  if (origin && origin !== new URL(req.url).origin && !isExtensionOrigin(origin)) {
     return json({ error: "Cross-origin request refused." }, 403);
   }
   return null;

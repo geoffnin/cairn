@@ -9,6 +9,7 @@
 // redirects and API calls.
 
 import { normalizeServerUrl } from "../ui/src/lib/server.js";
+import { ext } from "./ext.js";
 export { normalizeServerUrl };
 
 export const LOCAL = "local";
@@ -19,9 +20,10 @@ export const LOCAL_BACKEND = Object.freeze({ kind: "local", label: "This browser
 const server = (url) => ({ kind: "server", url, label: new URL(url).host });
 
 // On a profile with no policy, storage.managed.get() can throw or never settle, so bound it.
+// Some browsers have no managed storage at all.
 async function managedServerUrl() {
   const managed = await Promise.race([
-    chrome.storage.managed.get("serverUrl").catch(() => ({})),
+    Promise.resolve(ext.storage.managed?.get("serverUrl")).then((m) => m ?? {}, () => ({})),
     new Promise((resolve) => setTimeout(() => resolve({}), 1000)),
   ]);
   try {
@@ -40,7 +42,7 @@ async function managedServerUrl() {
  * `choices` is what the popup can switch between: this browser, plus the server once one is set.
  */
 export async function getState() {
-  const [managedUrl, sync] = await Promise.all([managedServerUrl(), chrome.storage.sync.get(["mode", "serverUrl"])]);
+  const [managedUrl, sync] = await Promise.all([managedServerUrl(), ext.storage.sync.get(["mode", "serverUrl"])]);
   if (managedUrl) {
     const pinned = server(managedUrl);
     return { mode: SHARED, server: pinned, active: pinned, choices: [pinned], managed: true };
@@ -59,11 +61,11 @@ export const backendId = (b) => (b.kind === "local" ? LOCAL : SHARED);
 
 /** Use this server for shared mode, and switch to it. */
 export function setServer(url) {
-  return chrome.storage.sync.set({ serverUrl: url, mode: SHARED });
+  return ext.storage.sync.set({ serverUrl: url, mode: SHARED });
 }
 
 export function setMode(mode) {
-  return chrome.storage.sync.set({ mode: mode === SHARED ? SHARED : LOCAL });
+  return ext.storage.sync.set({ mode: mode === SHARED ? SHARED : LOCAL });
 }
 
 /**
@@ -71,17 +73,17 @@ export function setMode(mode) {
  * first) as the shared server, and the mode that was in effect.
  */
 export async function migrateSettings() {
-  const old = await chrome.storage.sync.get(["backends", "active", "serverUrl"]);
+  const old = await ext.storage.sync.get(["backends", "active", "serverUrl"]);
   if (!Array.isArray(old.backends)) return;
   const urls = old.backends.map((b) => b?.url).filter((u) => typeof u === "string");
   const chosen = urls.includes(old.active) ? old.active : urls[0];
   const update = { mode: urls.includes(old.active) ? SHARED : LOCAL };
   if (chosen && !old.serverUrl) update.serverUrl = chosen;
-  await chrome.storage.sync.set(update);
-  await chrome.storage.sync.remove(["backends", "active"]);
+  await ext.storage.sync.set(update);
+  await ext.storage.sync.remove(["backends", "active"]);
 }
 
-export const hasServerAccess = (backend) => chrome.permissions.contains({ origins: [`${backend.url}/*`] });
+export const hasServerAccess = (backend) => ext.permissions.contains({ origins: [`${backend.url}/*`] });
 
 /** API call using the browser's Cloudflare Access session for the server. */
 export async function api(backend, method, path, body) {

@@ -127,11 +127,12 @@ describe("api", () => {
 
   it("requires sign-in and blocks cross-site writes", async () => {
     expect((await call("/_/api/links", { as: null })).status).toBe(401);
-    const post = (headers: Record<string, string>) =>
-      call("/_/api/links", { method: "POST", body: { slug: "x", url: "https://a.test" }, headers });
+    const post = (headers: Record<string, string>, slug = "x") =>
+      call("/_/api/links", { method: "POST", body: { slug, url: "https://a.test" }, headers });
     expect((await post({ "x-cairn-request": "0" })).status).toBe(403);
     expect((await post({ origin: "https://evil.test" })).status).toBe(403);
     expect((await post({ origin: "chrome-extension://abcdef" })).status).toBe(201);
+    expect((await post({ origin: "moz-extension://0b1c2d3e-4f50-6172-8394-a5b6c7d8e9f0" }, "y")).status).toBe(201);
   });
 });
 
