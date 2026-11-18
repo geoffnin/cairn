@@ -1,6 +1,6 @@
 <!-- The filter above a list: a field with its shortcut as a kbd hint. "/" anywhere on the page
-     focuses it; Esc clears it and leaves. `prominent` makes it the page's main control: taller, on
-     the surface, with a search icon. `placeholder` can say more than the label ("Search 214 links"). -->
+     focuses it; Esc clears it and leaves. `prominent` makes it the page's main control: taller,
+     with a search icon. `placeholder` can say more than the label ("Search 214 links"). -->
 <script lang="ts">
   import Icon from "./Icon.svelte";
 
@@ -36,9 +36,9 @@
 
 <style>
   .search { position: relative; flex: 1 1 240px; }
-  input { background: var(--surface-sunken); padding-right: 40px; }
+  input { padding-right: 40px; }
   .cn-kbd { position: absolute; right: var(--space-2); top: 50%; transform: translateY(-50%); pointer-events: none; }
   .search:focus-within .cn-kbd { display: none; }
-  .prominent input { height: var(--control-comfortable); padding-left: 36px; background: var(--surface); }
+  .prominent input { height: var(--control-comfortable); padding-left: 36px; }
   .glass { position: absolute; left: var(--space-3); top: 50%; transform: translateY(-50%); display: flex; color: var(--ink-muted); pointer-events: none; }
 </style>

@@ -22,13 +22,12 @@
     source?: string;
     now?: Date;
     allLinksHref?: string;
-    signOutHref?: string;
     copy?: (text: string) => Promise<void>;
     onedit?: (link: Link) => void;
     ondelete?: (link: Link) => void;
   };
   let {
-    host, me, link, uses, changes, createdBy, source, now, allLinksHref = "#all", signOutHref = "#signout",
+    host, me, link, uses, changes, createdBy, source, now, allLinksHref = "#all",
     copy, onedit, ondelete,
   }: Props = $props();
   let active = $state<number | null>(null);
@@ -37,7 +36,7 @@
 <Page>
   <Header>
     {#snippet hint()}<code>{host}</code>{/snippet}
-    {#snippet end()}<Account email={me} {signOutHref} />{/snippet}
+    {#snippet end()}<Account email={me} />{/snippet}
   </Header>
   <Breadcrumb trail={[{ label: "All links", href: allLinksHref }]} current={link.slug} />
   <LinkSummary {link} {now} {copy} {onedit} {ondelete} />

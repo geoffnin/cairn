@@ -21,6 +21,12 @@ const preview: Preview = {
       return _story();
     },
   ],
+  // A play function's click is synthetic, so Chrome treats the focus it leaves on a button as
+  // keyboard focus and draws the ring, which a real click never shows. Let go of it once the
+  // story has played, so the story rests as people see it.
+  afterEach: () => {
+    if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur();
+  },
   parameters: {
     layout: "padded",
     backgrounds: { disable: true },

@@ -10,7 +10,7 @@
   {#snippet template()}
     <Header>
       {#snippet hint()}<code>go.example.com</code>{/snippet}
-      {#snippet end()}<Account email="dev@example.com" signOutHref="#signout" />{/snippet}
+      {#snippet end()}<Account email="dev@example.com" />{/snippet}
     </Header>
   {/snippet}
 </Story>

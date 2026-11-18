@@ -8,6 +8,6 @@
 
 <LinksPage source={serverLinks}>
   {#snippet account()}
-    {#if me}{me.email}{me.isAdmin ? " (admin)" : ""} · <a href="/_/auth/logout">Sign out</a>{/if}
+    {#if me}{me.email}{me.isAdmin ? " (admin)" : ""}{/if}
   {/snippet}
 </LinksPage>
