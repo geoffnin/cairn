@@ -256,7 +256,9 @@ server's web UI) and `extension/`. `server/` is its own package, the Cloudflare 
 npm ci                           # at the root: Svelte, Vite and the test tools
 npm run build                    # web UI into server/public/_/, extension into extension/dist/
 npm run check                    # tokens up to date, svelte-check (types and accessibility)
-npm test                         # component tests (Vitest), then the extension's link rules
+npm test                         # unit and component tests, every story in Chromium, then the
+                                 # extension's link rules (once: npx playwright install chromium)
+npm run storybook                # the component library on http://localhost:6006
 
 cd server
 npm ci
@@ -290,11 +292,37 @@ design/tokens.json          design tokens exported from the Cairn design system
 design/build-tokens.mjs     turns them into ui/src/styles/tokens.css
 ui/src/styles/global.css    tokens, fonts, element defaults and shared primitives, in cascade layers
 ui/src/styles/fonts/        Instrument Sans and IBM Plex Mono (OFL), bundled, never from a CDN
-ui/src/components/          one .svelte file per component, its styles scoped inside it
+ui/src/components/          one .svelte file per component, its styles scoped inside it, and
+                            its stories beside it (Name.stories.svelte)
 ui/src/lib/links.ts         the Link and LinkSource types, and helpers both apps use
+ui/src/lib/format.ts        counts, dates, owners and shortened URLs as lists show them
+ui/src/lib/usage.ts         usage totals and the usage chart's layout
+ui/src/lib/passthrough.ts   offering {*} for a page that ends in an ID
+ui/src/stories/             demo data and wiring that only the stories use
+.storybook/                 Storybook's configuration: theme and density in the toolbar
 web/                        the server UI: entry point, App.svelte, the API LinkSource
 extension/src/              the popup, settings and manage pages; extension/public/ is copied as is
 ```
+
+### Storybook
+
+`npm run storybook` opens the component library, built up from small to large:
+
+- **Primitives**: a go/ name, a key, a button, a field.
+- **Parts**: a few primitives together, such as a notice that a name is taken, or a step card.
+- **Sections**: a whole piece of a page, such as the popup's form or a link's usage chart.
+- **Journeys**: the critical user journeys as full screens. 1, the welcome tab after installing;
+  2, the toolbar popup in its five states; 3a to 3c, the server's directory, the page for a name
+  nobody has made yet, and one link's page with its usage and change history. Some stories are
+  wired to links in memory, so a journey can be clicked through.
+
+The toolbar switches theme (light, dark) and density. Every story is also a test: `npm test`
+renders each one in Chromium, runs its play function (the interactions it describes, with their
+expectations) and checks it for accessibility problems with axe, failing on any. The Accessibility,
+Interactions and Tests panels in Storybook show the same results for the story on screen.
+
+Components for the journeys take their data as props and report what people do through
+callbacks; the apps have not adopted them yet.
 
 To change a colour, size or font, update `design/tokens.json` and run `npm run tokens`;
 `npm run check` fails if `tokens.css` is out of date.

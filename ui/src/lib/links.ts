@@ -68,3 +68,20 @@ export interface Message {
   text: string;
   error?: boolean;
 }
+
+/** What is known about a name while it is being typed. */
+export type NameCheck =
+  | { state: "checking" }
+  | { state: "free" }
+  /** `alternative` is a free name to offer instead. */
+  | { state: "taken"; link: Link; alternative?: string };
+
+/** A link with how often it was used in the last 30 days. */
+export interface UsedLink extends Link {
+  uses: number;
+}
+
+/** A row of the server's directory: a used link, and when it last changed (ISO time). */
+export interface DirectoryLink extends UsedLink {
+  updated: string;
+}
