@@ -6,9 +6,9 @@ address bar and land on the right page. Cairn is two pieces:
 - **`server/`** — a Cloudflare Worker where people create, search and share links. Cloudflare
   Access signs people in with your identity provider (Okta, Entra ID, Google, any SAML or OIDC
   provider). Links live in D1, redirects are cached in KV, and usage goes to Workers Logs.
-- **`extension/`** — a Chrome extension that makes `go/name` work in the address bar, with no
-  DNS or hosts-file changes. It works on its own too: in **local mode** it keeps links in the
-  browser, with no server at all.
+- **`extension/`** — a browser extension for Chrome, Edge and Firefox that makes `go/name`
+  work in the address bar, with no DNS or hosts-file changes. It works on its own too: in
+  **local mode** it keeps links in the browser, with no server at all.
 
 It is built to cost nothing to run at company scale and to have no cold starts.
 The reasoning behind each choice is in [docs/DECISIONS.md](docs/DECISIONS.md).
@@ -189,12 +189,21 @@ over OpenTelemetry, create a traces destination in the dashboard and add its nam
 
 ## Install the extension
 
-**Try it:** build it first (`npm ci && npm run build` at the repository root), then open
-`chrome://extensions`, turn on Developer mode, choose **Load unpacked** and pick the
-`extension/dist/` folder. The settings page opens with **local mode** selected, so `go/` links
-work straight away, stored in this browser.
+**Try it:** download the package for your browser from the latest
+[GitHub release](https://github.com/geoffnin/cairn/releases), or build it yourself
+(`npm ci && npm run build` at the repository root), then load it:
 
-**Local mode** keeps links in this Chrome profile only (`chrome.storage.local`): no server, no
+- **Chrome:** open `chrome://extensions`, turn on Developer mode, choose **Load unpacked** and
+  pick `extension/dist/chrome/` (or the unzipped `…-chrome-edge.zip`).
+- **Edge:** the same, from `edge://extensions`, with the same folder.
+- **Firefox** (140 or later): open `about:debugging#/runtime/this-firefox`, choose **Load
+  Temporary Add-on** and pick `extension/dist/firefox/manifest.json` (or the `…-firefox.zip`).
+  Temporary add-ons last until Firefox restarts; for a lasting install, publish it (below).
+
+The settings page opens with **local mode** selected, so `go/` links work straight away, stored
+in this browser.
+
+**Local mode** keeps links in this browser profile only (the extension's local storage): no server, no
 sign-in, nothing shared and nothing synced to other devices. Links behave exactly as on a server,
 including `{*}` pass-through. An unknown name opens the extension's own "new link" page, and
 **Manage links** in settings lists, searches, edits and deletes them. There is no import or
@@ -203,7 +212,7 @@ export yet, so links made in local mode stay in local mode.
 **Shared mode** uses your company's Cairn server instead, so everyone sees the same links:
 
 1. In settings, under **Shared**, enter the server URL and choose **Use this server**.
-2. Allow the permission Chrome asks for, so the extension can reach your server.
+2. Allow the permission the browser asks for, so the extension can reach your server.
 3. If you are not signed in yet, a tab opens on the server and Cloudflare Access asks you to sign
    in with your company account. After that, links, the toolbar popup and address-bar search
    all use that sign-in until the Access session expires.
@@ -211,10 +220,15 @@ export yet, so links made in local mode stay in local mode.
 There is one server at a time. Switch between this browser and shared in settings or in the
 toolbar popup; the other side's links are kept, just not used.
 
-**Roll it out:** build it, zip the `extension/dist/` folder and publish it (unlisted or private) on the Chrome
-Web Store, then force-install it by policy. Set the server URL for everyone with a managed
-storage policy (the extension's `serverUrl` setting); people then only need to sign in, and
-local mode is not offered. Where that setting goes depends on how you manage Chrome:
+**Roll it out:** take the packages attached to a GitHub release (see [Release](#release)) and
+publish them, unlisted or private: `…-chrome-edge.zip` on the Chrome Web Store and on Edge
+Add-ons, `…-firefox.zip` on Firefox Add-ons (it asks for the source code too, because the
+extension is bundled: upload the release's source archive). Then force-install it by policy.
+Set the server URL for everyone with a managed storage policy (the extension's `serverUrl`
+setting); local mode is then not offered. Each person still allows the extension to reach the
+server once (the browser asks, or **Grant access** in settings) and signs in; until they do,
+the popup hands off to the server's own form and address-bar search shows no suggestions.
+Where that setting goes depends on how you manage the browser:
 
 - **Google Admin console:** under the force-installed extension's settings, paste the policy
   JSON: `{ "serverUrl": { "Value": "https://go.example.com" } }`
@@ -232,8 +246,24 @@ local mode is not offered. Where that setting goes depends on how you manage Chr
   }
   ```
 
-Check `chrome://policy` on a managed machine afterwards: `serverUrl` should be listed under the
-extension. These formats follow Chrome's administrator documentation but have not been tried on
+- **Edge:** as for Chrome, under
+  `HKLM\Software\Policies\Microsoft\Edge\3rdparty\extensions\<extension-id>\policy` on Windows, or the `3rdparty` key in Edge's JSON policy file elsewhere.
+- **Firefox (`policies.json`):** the extension's ID is `cairn@geoffnin.github.io`.
+
+  ```json
+  {
+    "policies": {
+      "3rdparty": {
+        "Extensions": {
+          "cairn@geoffnin.github.io": { "serverUrl": "https://go.example.com" }
+        }
+      }
+    }
+  }
+  ```
+
+Check `chrome://policy` (`edge://policy`, `about:policies`) on a managed machine afterwards: `serverUrl` should be listed under the
+extension. These formats follow each browser's administrator documentation but have not been tried on
 a managed fleet.
 
 ### Using it
@@ -244,8 +274,8 @@ a managed fleet.
   currently come from (this browser or your server); once a server is set, the popup lets you
   switch.
 
-If Chrome runs a web search the first time you type `go/name`, type `go/name/` (trailing slash)
-once, or use the `go` + space form; Chrome then remembers it as an address.
+If the browser runs a web search the first time you type `go/name`, type `go/name/` (trailing
+slash) once, or use the `go` + space form; it then remembers it as an address.
 
 ## Develop
 
@@ -254,7 +284,9 @@ server's web UI) and `extension/`. `server/` is its own package, the Cloudflare 
 
 ```sh
 npm ci                           # at the root: Svelte, Vite and the test tools
-npm run build                    # web UI into server/public/_/, extension into extension/dist/
+npm run build                    # web UI into server/public/_/, extension into extension/dist/chrome/
+                                 # and extension/dist/firefox/
+npm run lint -w extension        # Firefox's add-on validator on dist/firefox/
 npm run check                    # tokens up to date, svelte-check (types and accessibility)
 npm test                         # unit and component tests, every story in Chromium, then the
                                  # extension's link rules (once: npx playwright install chromium)
@@ -275,14 +307,29 @@ localhost. Point the extension at `http://localhost:8787` to test the two togeth
 
 For live reload on the web UI, run `npm run dev -w web` at the root alongside the server's
 `npm run dev`: Vite serves the page on http://localhost:5173/_/ and passes API calls to the
-Worker. For the extension, `npm run dev -w extension` rebuilds `extension/dist/` on every save;
-reload the extension in `chrome://extensions` to pick it up.
+Worker. For the extension, `npm run dev -w extension` rebuilds `extension/dist/chrome/` on every save;
+reload the extension in `chrome://extensions` to pick it up. `npm run dev:firefox -w extension`
+does the same for `extension/dist/firefox/` (or run `npx web-ext run -s extension/dist/firefox`
+from the root, which starts Firefox with it and reloads it for you).
+
+The extension has one source for every browser. `extension/manifest.json` is Chrome's (and
+Edge's) manifest; `extension/vite.config.ts` adjusts it for Firefox (an event-page background
+script instead of a service worker, the add-on ID, no managed-storage schema). Code calls the
+extension APIs through `ext` from `extension/ext.js`, which is `browser` in Firefox and
+`chrome` in Chrome and Edge; the few behaviour differences check `__TARGET__`.
+
+### Release
+
+Bump `version` in `extension/manifest.json`, merge, then publish a GitHub release tagged with
+that version (`v0.6.0` for `0.6.0`). The Release workflow builds and lints the extension and
+attaches `cairn-extension-<version>-chrome-edge.zip` and `cairn-extension-<version>-firefox.zip`
+to the release; it fails if the tag and the manifest disagree.
 
 ### Frontend
 
 Both UIs are Svelte apps built by Vite into static files: the server's into `server/public/_/`,
 which the Worker serves after signing the request in, and the extension's into
-`extension/dist/`. The manage page (New link card, search, links table, edit dialog) is one
+`extension/dist/<browser>/`. The manage page (New link card, search, links table, edit dialog) is one
 component, `ui/src/components/LinksPage.svelte`, used by both; each app hands it a `LinkSource`
 that says where links live (`web/src/api.ts` for the server, `extension/src/localLinks.ts` for
 this browser).

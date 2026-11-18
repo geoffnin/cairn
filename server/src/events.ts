@@ -16,9 +16,12 @@ export const CREATE_EVENT = "cairn.link.create";
 export const UPDATE_EVENT = "cairn.link.update";
 export const DELETE_EVENT = "cairn.link.delete";
 
-/** API writes from the extension's popup carry its chrome-extension:// origin. */
-const clientKind = (req: Request): "extension" | "browser" =>
-  (req.headers.get("origin") ?? "").startsWith("chrome-extension://") ? "extension" : "browser";
+/** Origin of an extension page: Chrome and Edge use chrome-extension://, Firefox moz-extension://. */
+export const isExtensionOrigin = (origin: string | null): boolean =>
+  !!origin && (origin.startsWith("chrome-extension://") || origin.startsWith("moz-extension://"));
+
+/** API writes from the extension's popup carry its extension origin. */
+const clientKind = (req: Request): "extension" | "browser" => (isExtensionOrigin(req.headers.get("origin")) ? "extension" : "browser");
 
 function hostOf(url: string): string | undefined {
   try {

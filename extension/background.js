@@ -1,4 +1,5 @@
 import { api, getState, hasServerAccess, migrateSettings } from "./config.js";
+import { ext } from "./ext.js";
 import { omniboxPath } from "./golinks.js";
 import { listLinks } from "./local.js";
 
@@ -10,8 +11,8 @@ const OLD_AUTH_RULE = 2; // from versions that held their own sign-in token; rem
 //   local mode  -> this extension's go.html#<anything>, which looks the link up in local storage.
 async function syncRules() {
   const { active } = await getState();
-  const target = active.kind === "local" ? `chrome-extension://${chrome.runtime.id}/go.html#\\1` : `${active.url}/\\1`;
-  await chrome.declarativeNetRequest.updateDynamicRules({
+  const target = active.kind === "local" ? `${ext.runtime.getURL("go.html")}#\\1` : `${active.url}/\\1`;
+  await ext.declarativeNetRequest.updateDynamicRules({
     removeRuleIds: [REDIRECT_RULE, OLD_AUTH_RULE],
     addRules: [
       {
@@ -24,22 +25,22 @@ async function syncRules() {
   });
 }
 
-chrome.runtime.onInstalled.addListener(async ({ reason }) => {
+ext.runtime.onInstalled.addListener(async ({ reason }) => {
   // Earlier versions stored sign-in tokens here; Cloudflare Access replaces them.
-  await chrome.storage.local.remove("tokens");
+  await ext.storage.local.remove("tokens");
   await migrateSettings();
   await syncRules();
-  if (reason === "install") chrome.runtime.openOptionsPage();
+  if (reason === "install") ext.runtime.openOptionsPage();
 });
-chrome.runtime.onStartup.addListener(syncRules);
-chrome.storage.onChanged.addListener((changes, area) => {
+ext.runtime.onStartup.addListener(syncRules);
+ext.storage.onChanged.addListener((changes, area) => {
   if ((area === "sync" && (changes.mode || changes.serverUrl)) || area === "managed") syncRules();
 });
 
 // Address bar: "go<space>name".
 const escapeXml = (s) => s.replace(/[<>&'"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
-chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
+ext.omnibox?.onInputChanged.addListener(async (text, suggest) => {
   const q = text.trim();
   if (!q) return;
   const { active } = await getState();
@@ -51,7 +52,11 @@ chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
     suggest(
       links.map((l) => ({
         content: l.slug,
-        description: `<match>go/${escapeXml(l.slug)}</match> <dim>${escapeXml(l.description || l.url)}</dim>`,
+        // Firefox shows descriptions as plain text; Chrome and Edge style the XML markup.
+        description:
+          __TARGET__ === "firefox"
+            ? `go/${l.slug} — ${l.description || l.url}`
+            : `<match>go/${escapeXml(l.slug)}</match> <dim>${escapeXml(l.description || l.url)}</dim>`,
       })),
     );
   } catch {
@@ -59,9 +64,9 @@ chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
   }
 });
 
-chrome.omnibox.onInputEntered.addListener((text, disposition) => {
+ext.omnibox?.onInputEntered.addListener((text, disposition) => {
   // "go jira ABC-1" behaves like go/jira/ABC-1; the redirect rule takes it from there.
   const url = `http://go/${omniboxPath(text)}`;
-  if (disposition === "currentTab") chrome.tabs.update({ url });
-  else chrome.tabs.create({ url, active: disposition === "newForegroundTab" });
+  if (disposition === "currentTab") ext.tabs.update({ url });
+  else ext.tabs.create({ url, active: disposition === "newForegroundTab" });
 });

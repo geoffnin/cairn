@@ -1,4 +1,5 @@
-// Local mode: links stored in this browser (chrome.storage.local, not synced to other devices).
+// Local mode: links stored in this browser (storage.local, not synced to other devices).
+import { ext } from "./ext.js";
 import { ValidationError, normalizeSlug, validateDescription, validateUrl } from "./golinks.js";
 
 const KEY = "localLinks";
@@ -7,7 +8,7 @@ const now = () => Math.floor(Date.now() / 1000);
 
 // A dictionary with no prototype, so a name like "constructor" is never mistaken for a saved link.
 async function readAll() {
-  return Object.assign(Object.create(null), (await chrome.storage.local.get(KEY))[KEY]);
+  return Object.assign(Object.create(null), (await ext.storage.local.get(KEY))[KEY]);
 }
 const present = (slug, l) => ({ slug, ...l });
 
@@ -20,7 +21,7 @@ function mutate(change) {
   return navigator.locks.request(LOCK, async () => {
     const all = await readAll();
     const result = await change(all);
-    await chrome.storage.local.set({ [KEY]: { ...all } });
+    await ext.storage.local.set({ [KEY]: { ...all } });
     return result;
   });
 }

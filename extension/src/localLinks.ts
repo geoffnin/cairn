@@ -1,5 +1,6 @@
 // Links kept in this browser (local.js), as a LinkSource for the shared manage page.
 import type { LinkSource } from "@cairn/ui/lib/links";
+import { ext } from "../ext.js";
 import { createLink, deleteLink, getLink, listLinks, updateLink } from "../local.js";
 
 export const localLinks: LinkSource = {
@@ -14,13 +15,13 @@ export const localLinks: LinkSource = {
     await deleteLink(link.slug);
   },
   // Straight to the local resolver: http://go/... would follow whichever mode is active.
-  href: (link) => chrome.runtime.getURL(`go.html#${encodeURIComponent(link.slug)}`),
+  href: (link) => ext.runtime.getURL(`go.html#${encodeURIComponent(link.slug)}`),
   confirmDelete: (link) => `Delete go/${link.slug}?`,
   watch(onChange) {
     const listener = (changes: Record<string, unknown>, area: string) => {
       if (area === "local" && "localLinks" in changes) onChange();
     };
-    chrome.storage.onChanged.addListener(listener);
-    return () => chrome.storage.onChanged.removeListener(listener);
+    ext.storage.onChanged.addListener(listener);
+    return () => ext.storage.onChanged.removeListener(listener);
   },
 };

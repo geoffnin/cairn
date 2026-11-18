@@ -7,6 +7,7 @@
   import type { Link, Message } from "@cairn/ui/lib/links";
   import { onMount } from "svelte";
   import { api, backendId, getState, hasServerAccess, setMode } from "../config.js";
+  import { ext } from "../ext.js";
   import { createLink } from "../local.js";
 
   type State = Awaited<ReturnType<typeof getState>>;
@@ -34,10 +35,10 @@
   );
 
   function openTab(target: string) {
-    chrome.tabs.create({ url: target });
+    ext.tabs.create({ url: target });
     window.close();
   }
-  const allLinksUrl = (b: Backend) => (b.kind === "local" ? chrome.runtime.getURL("links.html") : `${b.url}/_/`);
+  const allLinksUrl = (b: Backend) => (b.kind === "local" ? ext.runtime.getURL("links.html") : `${b.url}/_/`);
   // The server's own form does the same job; used when the API cannot be called from here
   // (no host access granted, or the person needs to sign in to Cloudflare Access first).
   function continueOnSite(b: Server) {
@@ -79,7 +80,7 @@
   onMount(() => {
     slugInput?.focus();
     loaded.then(show);
-    chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
+    ext.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
       if (tab?.url && /^https?:/.test(tab.url) && !url) url = tab.url;
     });
   });
@@ -103,7 +104,7 @@
     <Status {message} />
     <div class="foot">
       <Button variant="primary" type="submit" disabled={busy}>Create link</Button>
-      <a href={chrome.runtime.getURL("links.html")} onclick={async (e) => { e.preventDefault(); openTab(allLinksUrl((await loaded).active)); }}>All links</a>
+      <a href={ext.runtime.getURL("links.html")} onclick={async (e) => { e.preventDefault(); openTab(allLinksUrl((await loaded).active)); }}>All links</a>
     </div>
   </form>
 </div>
