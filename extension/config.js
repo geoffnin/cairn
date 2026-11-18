@@ -8,27 +8,15 @@
 // Cloudflare Access. The extension holds no credentials: the browser's Access session signs in
 // redirects and API calls.
 
+import { normalizeServerUrl } from "../ui/src/lib/server.js";
+export { normalizeServerUrl };
+
 export const LOCAL = "local";
 export const SHARED = "shared";
 /** @type {LocalBackend} */
 export const LOCAL_BACKEND = Object.freeze({ kind: "local", label: "This browser" });
 /** @returns {ServerBackend} */
 const server = (url) => ({ kind: "server", url, label: new URL(url).host });
-
-/** Returns a clean origin ("https://go.example.com") or throws with a user-facing message. */
-export function normalizeServerUrl(raw) {
-  let url;
-  try {
-    url = new URL(String(raw).trim());
-  } catch {
-    throw new Error("Enter a full URL, like https://go.example.com");
-  }
-  const local = url.hostname === "localhost" || url.hostname === "127.0.0.1";
-  if (url.protocol !== "https:" && !(local && url.protocol === "http:")) {
-    throw new Error("The server URL must use https://");
-  }
-  return url.origin;
-}
 
 // On a profile with no policy, storage.managed.get() can throw or never settle, so bound it.
 async function managedServerUrl() {

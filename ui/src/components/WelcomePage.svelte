@@ -15,13 +15,16 @@
 
   type Props = {
     mode?: "local" | "shared";
+    serverUrl?: string;
+    connect: (url: string) => Promise<void>;
     create: (link: NewLink) => Promise<Link>;
     onmodechange?: (mode: "local" | "shared") => void;
     onimport?: () => void;
     settingsHref?: string;
     linksHref?: string;
   };
-  let { mode = $bindable("local"), create, onmodechange, onimport, settingsHref = "#settings", linksHref = "#links" }: Props = $props();
+  let { mode = $bindable("local"), serverUrl = $bindable(""), connect, create, onmodechange, onimport, settingsHref = "#settings", linksHref = "#links" }: Props = $props();
+  let pending = $state(mode === "shared" && !serverUrl);
   let made = $state<Link | null>(null);
   let skipped = $state(false);
   const firstDone = $derived(Boolean(made) || skipped);
@@ -41,17 +44,22 @@
     <OmniboxPreview typed="road" suggestions={[{ slug: "roadmap", description: "Product roadmap, 2027" }, { slug: "roadmap-archive", description: "Older plans" }]} />
   </section>
 
-  <Step n={1} title="Where your links live" state="done">
+  <Step n={1} title="Where your links live" state={pending ? "current" : "done"}>
     {#snippet aside()}Change any time in Settings{/snippet}
-    <WhereLinksLive bind:mode onchange={onmodechange} />
+    <WhereLinksLive bind:mode bind:serverUrl bind:pending {connect} onchange={onmodechange} />
   </Step>
 
-  <Step n={2} title="Make your first link" state={firstDone ? "done" : "current"}>
-    {#snippet aside()}{#if !firstDone}<LinkButton muted onclick={() => (skipped = true)}>Skip for now</LinkButton>{/if}{/snippet}
-    <FirstLinkForm {create} {onimport} oncreated={(l) => (made = l)} />
+  <Step n={2} title="Make your first link" state={pending ? "todo" : firstDone ? "done" : "current"}>
+    {#snippet aside()}{#if !firstDone && !pending}<LinkButton muted onclick={() => (skipped = true)}>Skip for now</LinkButton>{/if}{/snippet}
+    {#if pending}
+      <p class="cn-hint">Connect your server above before making a shared link, or choose This browser to continue locally.</p>
+    {/if}
+    <div hidden={pending}>
+      <FirstLinkForm {create} {onimport} oncreated={(l) => (made = l)} />
+    </div>
   </Step>
 
-  <Step n={3} title="Try it" state={firstDone ? "current" : "todo"}>
+  <Step n={3} title="Try it" state={!pending && firstDone ? "current" : "todo"}>
     <TryIt example={made?.slug ?? "roadmap"} />
   </Step>
 
